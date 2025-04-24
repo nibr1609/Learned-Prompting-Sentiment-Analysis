@@ -1,0 +1,78 @@
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any
+from pathlib import Path
+import time
+
+@dataclass
+class ModelConfig:
+    model_name: str
+    model_type: str
+    pretrained: bool = False
+    learning_rate: float = 1e-5
+    batch_size: int = 32
+    num_epochs: int = 3
+    max_length: int = 128
+    dropout: float = 0.1
+    weight_decay: float = 0.01
+    warmup_steps: int = 100
+    gradient_accumulation_steps: int = 1
+    label_mapping: Dict[int, str] = field(default_factory=lambda: {
+        0: "negative",
+        1: "neutral",
+        2: "positive"
+    })
+
+@dataclass
+class ExperimentConfig:
+    experiment_name: str
+    save_dir: Path
+    experiment_id: str = field(default_factory=lambda: str(int(time.time())))
+    seed: int = 42
+    device: str = "cpu"
+    num_workers: int = 4
+    save_best_model: bool = True
+    early_stopping_patience: int = 3
+    log_interval: int = 100
+    max_test_samples: Optional[int] = None  # If set, only use first k samples for testing
+
+@dataclass
+class DataConfig:
+    train_path: Path
+    test_path: Path
+    submission_dir: Path
+    experiment_output_dir: Path
+    val_split: float = 0.1
+    random_state: int = 42
+
+@dataclass
+class Config:
+    model: ModelConfig
+    experiment: ExperimentConfig
+    data: DataConfig
+
+def get_default_configs() -> Config:
+    base_path = Path(__file__).parent.parent.parent
+    data_path = base_path / "data"
+    
+    model_config = ModelConfig(
+        model_name="default_model",
+        pretrained=True
+    )
+
+    experiment_config = ExperimentConfig(
+        experiment_name="default_experiment",
+        save_dir=base_path / "experiment_results"
+    )
+
+    data_config = DataConfig(
+        train_path=data_path / "training.csv",
+        test_path=data_path / "test.csv",
+        submission_dir=base_path / "submissions",
+        experiment_output_dir=base_path / "experiments"
+    )
+
+    return Config(
+        model=model_config,
+        experiment=experiment_config,
+        data=data_config
+    ) 

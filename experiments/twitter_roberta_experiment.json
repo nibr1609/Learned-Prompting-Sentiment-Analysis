@@ -1,0 +1,26 @@
+{
+    "name": "bertweet_experiment",
+    "mode": "inference",
+    "model": {
+        "model_name": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        "model_type": "HuggingFaceModel",
+        "pretrained": true,
+        "label_mapping": {
+            "0": "negative",
+            "1": "neutral",
+            "2": "positive"
+        }
+    },
+    "experiment": {
+        "experiment_name": "bertweet_inference",
+        "save_dir": "experiment_results",
+        "device": "cpu",
+        "num_workers": 4
+    },
+    "data": {
+        "train_path": "../data/training.csv",
+        "test_path": "../data/test.csv",
+        "submission_dir": "../submissions",
+        "experiment_output_dir": "../results/experiments"
+    }
+} 
