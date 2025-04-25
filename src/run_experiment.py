@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Dict, Any
 import argparse
 from config.config import Config, ModelConfig, ExperimentConfig, DataConfig
-from models.huggingface_model import HuggingFaceModel
+from models.huggingface_model import BERTHuggingFaceModel
 from experiments.experiment_runner import ExperimentRunner
 from utils.submission_creation import create_submission
 
@@ -15,7 +15,7 @@ def load_experiment_config(config_path: Path) -> Dict[str, Any]:
 def create_config_from_json(config_dict: Dict[str, Any]) -> Config:
     """Create Config object from JSON configuration."""
     # Convert string paths to Path objects
-    for key in ['train_path', 'test_path', 'submission_dir', 'experiment_output_dir', 'save_dir']:
+    for key in ['train_path', 'test_path', 'submission_dir', 'experiment_output_dir', 'save_dir', 'model_output_dir']:
         if key in config_dict['data']:
             config_dict['data'][key] = Path(config_dict['data'][key])
         elif key in config_dict['experiment']:
@@ -37,7 +37,7 @@ def get_model_class(model_type: str):
     """Get the appropriate model class based on the model name."""
     # TODO: Load class directly
     model_classes = {
-        "HuggingFaceModel": HuggingFaceModel
+        "HuggingFaceModel": BERTHuggingFaceModel
     }
     return model_classes.get(model_type)
 
@@ -69,18 +69,10 @@ def main():
     model = model_class(config)
     
     # Initialize experiment runner
-    runner = ExperimentRunner(config, model)
+    runner = ExperimentRunner(config, config_path, model)
     
-    # Run experiment based on mode
-    if config_dict['mode'] == 'inference':
-        predictions = runner.evaluate_pretrained()
-        create_submission(predictions, config)
-        print("Inference completed and submission created!")
-    elif config_dict['mode'] == 'train_and_evaluate':
-        runner.run()
-        print("Training and evaluation completed!")
-    else:
-        raise ValueError(f"Unknown mode: {config_dict['mode']}")
+    assert config.experiment.mode in ["train_inference", "inference"], "mode in config must be set to train_inference or inference"
+    runner.run()
 
 if __name__ == "__main__":
     main() 

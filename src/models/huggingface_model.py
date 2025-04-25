@@ -1,27 +1,141 @@
+from datasets import load_dataset, Dataset
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    TrainingArguments,
+    Trainer,
+)
+import numpy as np
 import torch
-import torch.nn as nn
-from typing import Dict
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from .base_model import BaseSentimentModel
+from models.base_model import BaseSentimentModel
 from config.config import Config
 
-class HuggingFaceModel(BaseSentimentModel):
+class BERTHuggingFaceModel(BaseSentimentModel):
     def __init__(self, config: Config):
-        super().__init__(config.model)
-        
-        # Initialize tokenizer and model
+        super().__init__(config)
         self.tokenizer = AutoTokenizer.from_pretrained(config.model.model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(config.model.model_name)
-        
-        # Freeze all parameters since we're only doing inference
-        for param in self.model.parameters():
-            param.requires_grad = False
-    
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
-        # Get BERTweet outputs
-        outputs = self.model(
-            input_ids=inputs['input_ids'],
-            attention_mask=inputs['attention_mask']
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            config.model.model_name,
+            num_labels=3,
         )
+        self.config = config
+    
+    def preprocess_dataset(self, config: Config):
+        # 1) load
+        ds = load_dataset("csv", data_files={
+            "train": str(config.data.train_path),
+            "test":  str(config.data.test_path)
+        })
+
+        # 2) optional subsampling
+        if config.experiment.max_train_samples:
+            ds["train"] = (
+                ds["train"]
+                .shuffle(seed=42)
+                .select(range(config.experiment.max_train_samples))
+            )
+        if config.experiment.max_test_samples:
+            ds["test"] = (
+                ds["test"]
+                .shuffle(seed=42)
+                .select(range(config.experiment.max_test_samples))
+            )
+
+        # 3) split off a val fold if requested
+        validation_exists = False
+        split = config.experiment.validation_set_split or 0.0
+        if split > 0:
+            validation_exists = True
+            split_ds = ds["train"].train_test_split(
+                test_size=split, seed=42
+            )
+            ds["train"] = split_ds["train"]
+            ds["val"]   = split_ds["test"]
+
+        # 4) tokenize & set torch format
+        def tokenize(batch):
+            toks = self.tokenizer(
+                batch["sentence"], padding="max_length", truncation=True
+            )
+            toks["labels"] = [
+                {"negative": 0, "neutral": 1, "positive": 2, None:None}[lab]
+                for lab in batch["label"]
+            ]
+            return toks
+
+        ds = ds.map(tokenize, batched=True)
+        ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+
+        return ds["train"], ds["val"] if validation_exists else None, ds["test"]
+
+    def train(self, train_ds):
+        model_root_directory = self.config.data.model_output_dir / (self.config.experiment.experiment_name + "_" + self.config.experiment.experiment_id)
+
+        model_root_directory.mkdir(parents=True, exist_ok=True)
+
+        args = TrainingArguments(
+            output_dir=model_root_directory / "output",
+            logging_dir=model_root_directory / "logs",
+            learning_rate=self.config.model.learning_rate,
+            per_device_train_batch_size=self.config.model.batch_size,
+            per_device_eval_batch_size=self.config.model.batch_size,
+            num_train_epochs=self.config.model.num_epochs,
+            weight_decay=self.config.model.weight_decay,
+            logging_strategy="epoch",
+            save_strategy="epoch",
+            label_names=["labels"],
+        )
+
+        def compute_metrics(p):
+            preds = np.argmax(p.predictions, axis=-1)
+            true_labels = np.array([ {0:"negative",1:"neutral",2:"positive", None:None}[lab]
+                                for lab in np.array(p.label_ids) ])
+            return {
+                "accuracy": (preds == true_labels).mean()
+            }
         
-        return outputs.logits 
+
+        self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, compute_metrics=compute_metrics)
+        self.trainer.can_return_loss = True
+        self.trainer.train()
+
+    def predict_logits(self, test_ds, val_ds):
+        # if nobody trained, still create a Trainer for inference
+        if not hasattr(self, "trainer"):
+            args = TrainingArguments(
+                output_dir=self.config.data.model_output_dir / "hf_tmp",
+                per_device_eval_batch_size=self.config.model.batch_size or 32,
+                logging_strategy="no",
+                save_strategy="no",
+            )
+            self.trainer = Trainer(model=self.model, args=args)
+
+        val_logits = None
+        if val_ds is not None:
+            val_logits = self.trainer.predict(val_ds).predictions
+        test_logits  = self.trainer.predict(test_ds).predictions
+        return test_logits, val_logits
+    
+    def predict(self, test_ds, val_ds):
+        test_logits, val_logits = self.predict_logits(test_ds, val_ds)
+
+        val_labels = None
+        if val_logits is not None:
+            val_labels = np.argmax(val_logits, axis=-1)
+            val_labels = np.array([ {0:"negative",1:"neutral",2:"positive", None:None}[lab]
+                                for lab in val_labels ])
+        
+        test_labels = np.argmax(test_logits, axis=-1)
+        test_labels = np.array([ {0:"negative",1:"neutral",2:"positive", None:None}[lab]
+                               for lab in test_labels ])
+
+        return test_labels, val_labels
+
+
+    def evaluate(self, pred, true_data):
+        true_labels = true_data["labels"]
+        true_labels = np.array([ {0:"negative",1:"neutral",2:"positive", None:None}[lab]
+                                for lab in np.array(true_labels) ])
+        metrics = super().evaluate(pred, true_labels)
+        print(metrics)
+        return metrics

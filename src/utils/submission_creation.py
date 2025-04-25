@@ -14,16 +14,11 @@ def create_submission(predictions: np.ndarray, config: Config) -> None:
         predictions: numpy array of predictions
         config: unified configuration object containing all necessary parameters
     """
-    # Ensure predictions is a numpy array
-    predictions = np.array(predictions)
-    
-    # Map numeric predictions to string labels
-    string_predictions = np.array([config.model.label_mapping[str(pred)] for pred in predictions])
     
     # Create submission DataFrame
     submission = pd.DataFrame({
         'id': range(len(predictions)),
-        'label': string_predictions
+        'label': predictions
     })
     
     # Create output directory if it doesn't exist

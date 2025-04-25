@@ -25,7 +25,7 @@ class ModelConfig:
 @dataclass
 class ExperimentConfig:
     experiment_name: str
-    save_dir: Path
+    mode: str
     experiment_id: str = field(default_factory=lambda: str(int(time.time())))
     seed: int = 42
     device: str = "cpu"
@@ -34,6 +34,8 @@ class ExperimentConfig:
     early_stopping_patience: int = 3
     log_interval: int = 100
     max_test_samples: Optional[int] = None  # If set, only use first k samples for testing
+    max_train_samples: Optional[int] = None  # If set, only use first k samples for testing
+    validation_set_split: Optional[float] = None
 
 @dataclass
 class DataConfig:
@@ -41,6 +43,7 @@ class DataConfig:
     test_path: Path
     submission_dir: Path
     experiment_output_dir: Path
+    model_output_dir: Path
     val_split: float = 0.1
     random_state: int = 42
 
@@ -60,8 +63,7 @@ def get_default_configs() -> Config:
     )
 
     experiment_config = ExperimentConfig(
-        experiment_name="default_experiment",
-        save_dir=base_path / "experiment_results"
+        experiment_name="default_experiment"
     )
 
     data_config = DataConfig(

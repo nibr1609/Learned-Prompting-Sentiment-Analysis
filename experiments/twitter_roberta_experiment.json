@@ -1,26 +1,27 @@
 {
     "name": "bertweet_experiment",
-    "mode": "inference",
     "model": {
-        "model_name": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        "model_name": "distilbert-base-uncased",
         "model_type": "HuggingFaceModel",
-        "pretrained": true,
-        "label_mapping": {
-            "0": "negative",
-            "1": "neutral",
-            "2": "positive"
-        }
+        "learning_rate": 2e-5,
+        "batch_size":16,
+        "num_epochs": 2,
+        "weight_decay": 0.01
     },
     "experiment": {
-        "experiment_name": "bertweet_inference",
-        "save_dir": "experiment_results",
+        "experiment_name": "distilbert",
+        "mode": "train_inference",
         "device": "cpu",
-        "num_workers": 4
+        "num_workers": 4,
+        "max_train_samples": 100,
+        "max_test_samples": 100,
+        "validation_set_split": 0.5
     },
     "data": {
         "train_path": "../data/training.csv",
         "test_path": "../data/test.csv",
         "submission_dir": "../submissions",
-        "experiment_output_dir": "../results/experiments"
+        "experiment_output_dir": "../results/experiments",
+        "model_output_dir": "../models"
     }
 } 
