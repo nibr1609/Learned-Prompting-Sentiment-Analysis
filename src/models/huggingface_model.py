@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from models.base_model import BaseSentimentModel
 from config.config import Config
+import evaluate
 
 class BERTHuggingFaceModel(BaseSentimentModel):
     def __init__(self, config: Config):
@@ -68,7 +69,7 @@ class BERTHuggingFaceModel(BaseSentimentModel):
 
         return ds["train"], ds["val"] if validation_exists else None, ds["test"]
 
-    def train(self, train_ds):
+    def train(self, train_ds, val_ds=None):
         model_root_directory = self.config.data.model_output_dir / (self.config.experiment.experiment_name + "_" + self.config.experiment.experiment_id)
 
         model_root_directory.mkdir(parents=True, exist_ok=True)
@@ -83,19 +84,35 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             weight_decay=self.config.model.weight_decay,
             logging_strategy="epoch",
             save_strategy="epoch",
+            eval_strategy="epoch",
             label_names=["labels"],
         )
 
+        accuracy_metric = evaluate.load("accuracy")
+        f1_metric = evaluate.load("f1")
+        precision_metric = evaluate.load("precision")
+        recall_metric = evaluate.load("recall")
+
         def compute_metrics(p):
             preds = np.argmax(p.predictions, axis=-1)
-            true_labels = np.array([ {0:"negative",1:"neutral",2:"positive", None:None}[lab]
-                                for lab in np.array(p.label_ids) ])
+            true_labels = p.label_ids
+            
+            accuracy = accuracy_metric.compute(predictions=preds, references=true_labels)
+            f1 = f1_metric.compute(predictions=preds, references=true_labels, average="macro")
+            precision = precision_metric.compute(predictions=preds, references=true_labels, average="macro")
+            recall = recall_metric.compute(predictions=preds, references=true_labels, average="macro")
+
             return {
-                "accuracy": (preds == true_labels).mean()
+                "accuracy": accuracy["accuracy"],
+                "f1": f1["f1"],
+                "precision": precision["precision"],
+                "recall": recall["recall"],
             }
         
-
-        self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, compute_metrics=compute_metrics)
+        if val_ds is not None:
+            self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, eval_dataset=val_ds, compute_metrics=compute_metrics)
+        else:
+            self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, compute_metrics=compute_metrics)
         self.trainer.can_return_loss = True
         self.trainer.train()
 

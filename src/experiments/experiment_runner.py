@@ -35,7 +35,11 @@ class ExperimentRunner:
             return self.model.predict(self.test_data, None)
     
     def train(self) -> None:
-        self.model.train(self.train_data)
+        if self.val_exists:
+            self.model.train(self.train_data, self.val_data)
+        else:
+            self.model.train(self.train_data)
+        
 
     def run(self):
         if self.config.experiment.mode == "train_inference":

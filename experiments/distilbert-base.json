@@ -5,7 +5,7 @@
         "model_type": "HuggingFaceModel",
         "learning_rate": 2e-5,
         "batch_size":16,
-        "num_epochs": 2,
+        "num_epochs": 3,
         "weight_decay": 0.01
     },
     "experiment": {
@@ -13,9 +13,9 @@
         "mode": "train_inference",
         "device": "cpu",
         "num_workers": 4,
-        "max_train_samples": 100,
+        "max_train_samples": 200,
         "max_test_samples": 100,
-        "validation_set_split": 0.5
+        "validation_set_split": 0.2
     },
     "data": {
         "train_path": "../data/training.csv",
