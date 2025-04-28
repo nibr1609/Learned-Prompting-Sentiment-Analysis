@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 import time
+import torch
 
 @dataclass
 class ModelConfig:
@@ -21,6 +22,7 @@ class ModelConfig:
         1: "neutral",
         2: "positive"
     })
+    #prompt_list: List[str] = []
 
 @dataclass
 class ExperimentConfig:
@@ -28,13 +30,13 @@ class ExperimentConfig:
     mode: str
     experiment_id: str = field(default_factory=lambda: str(int(time.time())))
     seed: int = 42
-    device: str = "cpu"
+    device: str = field(default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu")
     num_workers: int = 4
     save_best_model: bool = True
     early_stopping_patience: int = 3
     log_interval: int = 100
-    max_test_samples: Optional[int] = None  # If set, only use first k samples for testing
-    max_train_samples: Optional[int] = None  # If set, only use first k samples for testing
+    max_test_samples: Optional[int] = None
+    max_train_samples: Optional[int] = None
     validation_set_split: Optional[float] = None
 
 @dataclass

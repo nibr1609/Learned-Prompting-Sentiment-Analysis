@@ -74,6 +74,8 @@ class BERTHuggingFaceModel(BaseSentimentModel):
 
         model_root_directory.mkdir(parents=True, exist_ok=True)
 
+        self.model.to(self.config.experiment.device)
+
         args = TrainingArguments(
             output_dir=model_root_directory / "output",
             logging_dir=model_root_directory / "logs",

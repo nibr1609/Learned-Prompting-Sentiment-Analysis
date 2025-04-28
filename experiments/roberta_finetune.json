@@ -1,21 +1,19 @@
 {
-    "name": "bertweet_experiment",
+    "name": "roberta_experiment",
     "model": {
-        "model_name": "distilbert-base-uncased",
+        "model_name": "roberta-base",
         "model_type": "HuggingFaceModel",
         "learning_rate": 5e-5,
-        "batch_size":16,
-        "num_epochs": 4,
+        "batch_size":8,
+        "num_epochs": 3,
         "weight_decay": 0.01
     },
     "experiment": {
-        "experiment_name": "distilbert",
+        "experiment_name": "roberta",
         "mode": "train_inference",
-        "device": "cpu",
-        "num_workers": 4,
-        "max_train_samples": 300,
-        "max_test_samples": 100,
-        "validation_set_split": 0.2
+        "max_train_samples": 400,
+        "max_test_samples": 300,
+        "validation_set_split": 0.25
     },
     "data": {
         "train_path": "../data/training.csv",
