@@ -10,6 +10,7 @@ import torch
 from models.base_model import BaseSentimentModel
 from config.config import Config
 import evaluate
+import pandas as pd
 
 class BERTHuggingFaceModel(BaseSentimentModel):
     def __init__(self, config: Config):
@@ -23,10 +24,19 @@ class BERTHuggingFaceModel(BaseSentimentModel):
     
     def preprocess_dataset(self, config: Config):
         # 1) load
+        # Hack to impute missing test column
+        test_csv = pd.read_csv(config.data.test_path)
+        original_csv = test_csv.copy()
+        test_csv["label"] = None
+
+        test_csv.to_csv(config.data.test_path, index=False)
+
         ds = load_dataset("csv", data_files={
             "train": str(config.data.train_path),
             "test":  str(config.data.test_path)
         })
+
+        original_csv.to_csv(config.data.test_path, index=False)
 
         # 2) optional subsampling
         if config.experiment.max_train_samples:

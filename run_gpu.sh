@@ -14,7 +14,7 @@ echo STARTING AT $(date)
 
 # Environment
 source /cluster/courses/cil/envs/miniforge3/etc/profile.d/conda.sh
-conda activate /home/nbritz/cil
+conda activate /cluster/courses/cil/envs/sentiment_analysis/
 # ...
 
 # Run your experiment
