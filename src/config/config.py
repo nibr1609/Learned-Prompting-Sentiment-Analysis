@@ -38,6 +38,7 @@ class ExperimentConfig:
     max_test_samples: Optional[int] = None
     max_train_samples: Optional[int] = None
     validation_set_split: Optional[float] = None
+    save_per_epoch: int = 4
 
 @dataclass
 class DataConfig:

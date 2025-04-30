@@ -4,6 +4,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     TrainingArguments,
     Trainer,
+    EarlyStoppingCallback
 )
 import numpy as np
 import torch
@@ -11,6 +12,8 @@ from models.base_model import BaseSentimentModel
 from config.config import Config
 import evaluate
 import pandas as pd
+from math import ceil
+from transformers import DataCollatorWithPadding
 
 class BERTHuggingFaceModel(BaseSentimentModel):
     def __init__(self, config: Config):
@@ -21,22 +24,18 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             num_labels=3,
         )
         self.config = config
+
+        if torch.cuda.is_available():
+            print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            print("No GPU available, using CPU.")
     
     def preprocess_dataset(self, config: Config):
         # 1) load
-        # Hack to impute missing test column
-        test_csv = pd.read_csv(config.data.test_path)
-        original_csv = test_csv.copy()
-        test_csv["label"] = None
-
-        test_csv.to_csv(config.data.test_path, index=False)
-
         ds = load_dataset("csv", data_files={
             "train": str(config.data.train_path),
             "test":  str(config.data.test_path)
         })
-
-        original_csv.to_csv(config.data.test_path, index=False)
 
         # 2) optional subsampling
         if config.experiment.max_train_samples:
@@ -86,6 +85,12 @@ class BERTHuggingFaceModel(BaseSentimentModel):
 
         self.model.to(self.config.experiment.device)
 
+        self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
+
+        # save save_per_epoch times per epoch
+        steps_per_epoch = ceil(len(train_ds) / self.config.model.batch_size)
+        eval_save_steps = max(1, steps_per_epoch // self.config.experiment.save_per_epoch)
+
         args = TrainingArguments(
             output_dir=model_root_directory / "output",
             logging_dir=model_root_directory / "logs",
@@ -95,9 +100,15 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             num_train_epochs=self.config.model.num_epochs,
             weight_decay=self.config.model.weight_decay,
             logging_strategy="epoch",
-            save_strategy="epoch",
-            eval_strategy="epoch",
+            save_strategy="steps",
+            eval_strategy="steps",
+            eval_steps=eval_save_steps,
+            save_steps=eval_save_steps,
+            save_total_limit = 5,
             label_names=["labels"],
+            load_best_model_at_end = True,
+            metric_for_best_model = "f1",
+            lr_scheduler_type = "linear"
         )
 
         accuracy_metric = evaluate.load("accuracy")
@@ -122,9 +133,9 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             }
         
         if val_ds is not None:
-            self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, eval_dataset=val_ds, compute_metrics=compute_metrics)
+            self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, eval_dataset=val_ds, compute_metrics=compute_metrics, data_collator=self.data_collator, callbacks = [EarlyStoppingCallback(early_stopping_patience=3)])
         else:
-            self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, compute_metrics=compute_metrics)
+            self.trainer = Trainer(model=self.model, args=args, train_dataset=train_ds, compute_metrics=compute_metrics, data_collator=self.data_collator, callbacks = [EarlyStoppingCallback(early_stopping_patience=self.config.experiment.early_stopping_patience)])
         self.trainer.can_return_loss = True
         self.trainer.train()
 

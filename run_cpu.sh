@@ -15,12 +15,14 @@ echo STARTING AT $(date)
 # Environment
 source /cluster/courses/cil/envs/miniforge3/etc/profile.d/conda.sh
 conda activate /home/nbritz/cil
-# ...
 
-# Run your experiment
+USER_ARG=$1
+CONFIG_ARG=$2
+
+echo "Running as $USER_ARG with config $CONFIG_ARG"
+
 cd src
-python3 run_experiment.py -c bertweet_pretrained_inference
-# python my_script.py
+python3 run_experiment.py -c "$CONFIG_ARG"
 
 echo "Done."
 echo FINISHED at $(date)

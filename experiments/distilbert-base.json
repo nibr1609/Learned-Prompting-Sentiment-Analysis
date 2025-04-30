@@ -4,7 +4,7 @@
         "model_name": "distilbert-base-uncased",
         "model_type": "HuggingFaceModel",
         "learning_rate": 5e-5,
-        "batch_size":16,
+        "batch_size": 16,
         "num_epochs": 4,
         "weight_decay": 0.01
     },
@@ -13,7 +13,7 @@
         "mode": "train_inference",
         "device": "cpu",
         "num_workers": 4,
-        "max_train_samples": 300,
+        "max_train_samples": 800,
         "max_test_samples": 100,
         "validation_set_split": 0.2
     },
@@ -24,4 +24,4 @@
         "experiment_output_dir": "../results/experiments",
         "model_output_dir": "../models"
     }
-} 
+}
