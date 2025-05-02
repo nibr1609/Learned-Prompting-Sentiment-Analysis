@@ -85,11 +85,15 @@ class BERTHuggingFaceModel(BaseSentimentModel):
 
         self.model.to(self.config.experiment.device)
 
-        self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
+        self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer,
+            pad_to_multiple_of=8)
 
         # save save_per_epoch times per epoch
         steps_per_epoch = ceil(len(train_ds) / self.config.model.batch_size)
         eval_save_steps = max(1, steps_per_epoch // self.config.experiment.save_per_epoch)
+
+        # save memory:
+        #self.model.gradient_checkpointing_enable()
 
         args = TrainingArguments(
             output_dir=model_root_directory / "output",
