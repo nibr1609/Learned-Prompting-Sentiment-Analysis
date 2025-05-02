@@ -12,14 +12,15 @@ set -o xtrace
 echo PWD:$(pwd)
 echo STARTING AT $(date)
 
-# Environment
-source /cluster/courses/cil/envs/miniforge3/etc/profile.d/conda.sh
-conda activate /home/nbritz/cil
-
+# Arguments
 USER_ARG=$1
 CONFIG_ARG=$2
 
 echo "Running as $USER_ARG with config $CONFIG_ARG"
+
+# Environment
+source /cluster/courses/cil/envs/miniforge3/etc/profile.d/conda.sh
+conda activate /home/"$USER_ARG"/cil
 
 cd src
 python3 run_experiment.py -c "$CONFIG_ARG"
