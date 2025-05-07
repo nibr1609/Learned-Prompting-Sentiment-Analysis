@@ -12,14 +12,13 @@ echo PWD:$(pwd)
 echo STARTING AT $(date)
 
 # Arguments
-USER_ARG=$1
-CONFIG_ARG=$2
+CONFIG_ARG=$1
 
-echo "Running as $USER_ARG with config $CONFIG_ARG"
+echo "Running config $CONFIG_ARG"
 
 # Environment
 source /cluster/courses/cil/envs/miniforge3/etc/profile.d/conda.sh
-conda activate /home/"$USER_ARG"/cil
+conda activate cil
 
 cd src
 python3 run_experiment.py -c "$CONFIG_ARG"
