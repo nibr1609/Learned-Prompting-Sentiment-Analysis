@@ -5,7 +5,7 @@ from transformers import pipeline
 
 def make_pipeline(
     model_dir: str,
-    pipeline_type: str = "text-to-text",
+    pipeline_type: str = "text-generation",
     override_device: str = None,
 ):
     model_dir = (
