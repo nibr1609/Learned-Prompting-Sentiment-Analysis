@@ -15,11 +15,11 @@ dependencies:
   - pytorch=2.5.1
   - scikit-learn=1.6.1
   # Hugging Face
-  - datasets=3.5.1
-  - transformers=4.49.0
-  - evaluate=0.4.1
+  - datasets=3.6.0
+  - transformers=4.51.3
+  - evaluate=0.4.3
   # Language Models
   - llama.cpp=0.0.4877
   # Non-Conda Packages
   - pip:
-    - lmql==0.7.3
+      - lmql==0.7.3
