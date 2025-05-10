@@ -1,14 +1,12 @@
 name: cil
 channels:
   - pytorch
-  - ai-staging
   - conda-forge
-  - huggingface
 dependencies:
-  - python=3.10
+  - python=3.12
   - pip=25.1
   # Exploratory Analysis
-  - matplotlib=3.10.0
+  - matplotlib=3.10.3
   - nltk=3.9.1
   - wordcloud=1.9.4
   # ML
@@ -18,8 +16,6 @@ dependencies:
   - datasets=3.6.0
   - transformers=4.51.3
   - evaluate=0.4.3
-  # Language Models
-  - llama.cpp=0.0.4877
   # Non-Conda Packages
   - pip:
-      - lmql==0.7.3
+      - llama-cpp-python==0.3.9
