@@ -81,31 +81,31 @@ class Prompt:
     @staticmethod
     def prompt_catalogue() -> Dict[str, "Prompt"]: 
         return {
-        # "direct_v1": Prompt.direct_example(),
-        # "direct_v2": Prompt.second_direct_example(), 
+        "direct_v1": Prompt.direct_example(),
+        "direct_v2": Prompt.second_direct_example(), 
         # "emoji_example": Prompt.emoji_example(), 
-        ## I will add more here
-        "direct_v3": Prompt(
-            template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. Choose oen of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v5": Prompt(
-            template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
+        # # I will add more here
+        # "direct_v3": Prompt(
+        #     template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+        #     sentiment_map={
+        #     "positive": Sentiment.POSITIVE,
+        #     "negative": Sentiment.NEGATIVE,
+        #     "neutral": Sentiment.NEUTRAL,
+        # }),
+        # "direct_v4": Prompt(
+        #     template="<start_of_turn>user\nSentiment classification task. Choose oen of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+        #     sentiment_map={
+        #     "positive": Sentiment.POSITIVE,
+        #     "negative": Sentiment.NEGATIVE,
+        #     "neutral": Sentiment.NEUTRAL,
+        # }),
+        # "direct_v5": Prompt(
+        #     template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+        #     sentiment_map={
+        #     "positive": Sentiment.POSITIVE,
+        #     "negative": Sentiment.NEGATIVE,
+        #     "neutral": Sentiment.NEUTRAL,
+        # }),
     }
 
     @staticmethod
@@ -355,56 +355,95 @@ class PromptEvaluator:
     def predict(self, prompt: Prompt, X: ArrayLike):
         return self.predict_proba(prompt, X).idxmax(axis=1)
 
-class PromptOptimizer: 
-    config: PromptEvaluatorConfig
-    llm: LLM
-
-    def __init__(
-        self,
-        config: PromptEvaluatorConfig,
-    ):
-        self.config = config
-        self.llm = LLM(
-            model_path=config.llm_gguf_path,
-            n_gpu_layers=config.n_gpu_layers,
-            n_ctx=config.n_ctx,
-            logits_all=True,
-            verbose=config.verbose,
-        )
+class PromptOptimizer:
+    def __init__(self, evaluator: PromptEvaluator):
+        self.evaluator = evaluator
+        self.config = evaluator.config
+        self.llm = evaluator.llm
 
     def fill_prompt_template(self, prompt: Prompt, input_text: str) -> str:
         return prompt.template.replace("<INPUT>", input_text)
 
-
-    def evaluate_prompt(self, prompt: Prompt, X: List[str], y_true: List[str]) -> Tuple[List[str], float]:
+    def evaluate_prompts(self, prompts: Dict[str, "Prompt"], X: List[str], y_true: List[str]) -> Dict[str, Tuple[List[str], float]]:
         # Runs the model on X using the given prompt, and compares predictions to y_true
-        y_pred = []
+        results = {}
 
-        for x in X: 
-            filled_prompt = prompt.template.replace("<INPUT>", x)
-            res = evaluator.llm.create_completion(prompt=filled_prompt, max_tokens=64, stop=[])
-            pred = res["choices"][0]["text"].strip().lower()
+        for name, prompt in prompts.items(): 
+            print(f"\n--- Evaluating with prompt: {name} ---")
 
-            if "positive" in pred:
-                y_pred.append("positive")
-            elif "negative" in pred:
-                y_pred.append("negative")
-            elif "neutral" in pred:
-                y_pred.append("neutral")
-            else:
-                y_pred.append("unknown")
-                print(y_pred)
+            # Run model
+            y_proba = evaluator.predict_proba(prompt, X)
 
-        accuracy = accuracy_score(
-            [label.lower() for label in y_true],
-            y_pred
-        )
-        return y_pred, accuracy
+            with pd.option_context("display.float_format", "{:0.4f}".format):
+                print(
+                "--------------------------------------------------------\n",
+                y_proba,
+                "\n--------------------------------------------------------",
+                )
+
+            # Get predicted labels
+            y_pred = y_proba.idxmax(axis=1).tolist()
+
+            # Compute accuracy
+            accuracy = accuracy_score([label.lower() for label in y_true], [pred.lower() for pred in y_pred])
+            results[name] = (y_pred, accuracy)
+            print(f"Accuracy: {accuracy:.2f}")
+            print(pd.DataFrame({"Text": X, "Pred": y_pred, "True": y_true}))
+        
+        # Sort prompts based on highest accuracy
+        sorted_results = sorted(results.items(), key=lambda x: x[1][1], reverse=True)
+        for name, (y_pred, acc) in sorted_results:
+            print(f"{name}: {acc:.2f}")
+        return sorted_results 
+    
+    def optimize_prompts(self, prompts: Dict[str, Tuple[List[str], float]], k:int) -> Dict[str, "Prompt"]: 
+        # nimmt die sortierten Resultate, gibt die ersten und letzten k an das completion modell
+        base_prompt_good = "<start_of_turn>user\nHere are some really good prompts:"
+        base_prompt_bad = "<start_of_turn>user\nHere are some prompts that don't work well:"
+        top_k = prompts[:k]
+        flop_k = prompts[-k:]
+
+        for i, (name,_) in enumerate(top_k): 
+            template = Prompt.prompt_catalogue()[name].template.strip()
+            base_prompt_good += f"Promt {i+1}:\n{template}\n\n"
+
+        for i, (name,_) in enumerate(flop_k): 
+            template = Prompt.prompt_catalogue()[name].template.strip()
+            base_prompt_bad += f"Promt {i+1}:\n{template}\n\n"
+
+        base_prompt_good += "Based on these, suggest 2 new prompt templates in a similar style. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
+        base_prompt_bad += "Based on these, suggest 2 improved prompt templates, that could work better. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
+        base_promt_both = base_prompt_bad+base_prompt_good+"Based on these, suggest 2 new prompt templates in a similar style to the good ones, and that work better than the bad ones. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
+        completions = {}
+
+        for label, prompt_text in [("good", base_prompt_good), ("bad", base_prompt_bad)]:
+            for i in range(2): 
+                res = self.evaluator.llm.create_completion(
+                    prompt = prompt_text, 
+                    max_tokens=170, 
+                    temperature=0.9,
+                    stop=[]
+                )
+            generated = res["choices"][0]["text"].strip()
+            completions[f"{label}_generated_{i+1}"] = generated
+        
+        # trying to give both the good and the bad example
+        result = self.evaluator.llm.create_completion(
+                    prompt = base_promt_both, 
+                    max_tokens=170, 
+                    temperature=0.9,
+                    stop=[]
+                )
+
+
+        return completions
+
+
 
 if __name__ == "__main__":
     config = PromptEvaluatorConfig.for_gemma_3_4b_it(verbose=True, debug=True)
     evaluator = PromptEvaluator(config)
-    optimizer = PromptOptimizer(config)
+    optimizer = PromptOptimizer(evaluator)
 
     X = [
         "FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
@@ -421,24 +460,16 @@ if __name__ == "__main__":
 
     # True labels, needed to determine ratings of the prompts
     y_true = ['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL']
-    #TODO: replace X by actual testing, and training dataset
+    
 
     # Loading the prompts from the catalogue
     prompts = Prompt.prompt_catalogue()
     
     # Running evaluation for each prompt 
-    for name, prompt in prompts.items(): 
-        print(f"\n--- Evaluating with prompt: {name} ---")
-        y_pred, acc = optimizer.evaluate_prompt(prompt, X, y_true)
-        for x, p, y in zip(X, y_pred, y_true):
-            print(f"Review: {x}\nPred: {p}, True: {y}\n")
-    print(f"Accuracy: {acc:.2f}")
+    results = optimizer.evaluate_prompts(prompts, X, y_true)
+    #print(results)
 
-    # with pd.option_context("display.float_format", "{:0.4f}".format):
-    #     print(
-    #         "--------------------------------------------------------\n",
-    #         y_proba,
-    #         "\n--------------------------------------------------------",
-    #         y_proba_2,
-    #         "\n--------------------------------------------------------",
-    #     )
+    #fake_results= [('direct_v1', (['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 1.0)), ('direct_v2', (['NEUTRAL', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 0.8333333333333334))]
+    completions = optimizer.optimize_prompts(results, 1)
+    print(completions)
+   
