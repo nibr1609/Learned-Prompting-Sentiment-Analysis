@@ -93,11 +93,39 @@ class Prompt:
             "neutral": Sentiment.NEUTRAL,
         }),
         "direct_v4": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. Choose oen of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            template="<start_of_turn>user\nSentiment classification task. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
             sentiment_map={
             "positive": Sentiment.POSITIVE,
             "negative": Sentiment.NEGATIVE,
             "neutral": Sentiment.NEUTRAL,
+        }),
+        "direct_v4_karltest": Prompt(
+            template="<start_of_turn>user\nClassify the sentiment! Choose one of the following sentiments: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+            "positive": Sentiment.POSITIVE,
+            "negative": Sentiment.NEGATIVE,
+            "neutral": Sentiment.NEUTRAL,
+        }),
+        "direct_v4_emphatic": Prompt(
+            template="<start_of_turn>user\nThis is a sentiment classification task. Your job is to carefully determine whether the review is positive, negative, or neutral. Respond with only one word.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
+        "direct_v4_shorter": Prompt(
+            template="<start_of_turn>user\nClassify the sentiment: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
+        "direct_v4_assertive": Prompt(
+            template="<start_of_turn>user\nClassify the sentiment of this review. Choose only from: positive, negative, or neutral. Do not explain your answer.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
         }),
         "direct_v5": Prompt(
             template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
@@ -105,6 +133,41 @@ class Prompt:
             "positive": Sentiment.POSITIVE,
             "negative": Sentiment.NEGATIVE,
             "neutral": Sentiment.NEUTRAL,
+        }),
+        "thoughtful_analyst": Prompt(
+            template="<start_of_turn>user\nPlease act as a sentiment analysis expert. Assess the following text and reply with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
+        "minimal_prompt": Prompt(
+            template="<start_of_turn>user\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
+        "professional_opinion": Prompt(
+            template="<start_of_turn>user\nGive a professional sentiment judgment for this review: positive, negative, or neutral?\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
+        "sarcasm_aware": Prompt(
+            template="<start_of_turn>user\nBe cautious of irony and sarcasm. Is the sentiment of the following review positive, negative, or neutral?\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
+        "market_review_style": Prompt(
+            template="<start_of_turn>user\nAnalyze the tone of the customer review below as if preparing for a product sentiment report. Reply with one of: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
         }),
     }
 
@@ -425,14 +488,28 @@ if __name__ == "__main__":
 
     # Loading the prompts from the catalogue
     prompts = Prompt.prompt_catalogue()
+    prompts["direct_v1"] = Prompt.direct_example()
+    prompts["direct_v2"] = Prompt.second_direct_example()
+    #prompts["direct_v3"] = Prompt.emoji_example()
     
     # Running evaluation for each prompt 
+    results = []
+
     for name, prompt in prompts.items(): 
         print(f"\n--- Evaluating with prompt: {name} ---")
         y_pred, acc = optimizer.evaluate_prompt(prompt, X, y_true)
         for x, p, y in zip(X, y_pred, y_true):
             print(f"Review: {x}\nPred: {p}, True: {y}\n")
-    print(f"Accuracy: {acc:.2f}")
+        print(f"Accuracy: {acc:.2f}")
+        true_total = sum(p.upper() == y for p, y in zip(y_pred, y_true))
+        results.append((name, acc, true_total, len(y_true)))
+
+    print("\n=== Summary Table ===")
+    import pandas as pd
+    summary_df = pd.DataFrame(results, columns=["Prompt Name", "Accuracy", "Correct", "Total"])
+    print(summary_df.to_string(index=False))
+    best_row = summary_df.loc[summary_df['Accuracy'].idxmax()]
+    print(f"\n Best Prompt: {best_row['Prompt Name']} with Accuracy: {best_row['Accuracy']:.2f} ({int(best_row['Correct'])}/{int(best_row['Total'])})")
 
     # with pd.option_context("display.float_format", "{:0.4f}".format):
     #     print(
