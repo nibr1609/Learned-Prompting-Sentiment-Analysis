@@ -1,13 +1,15 @@
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+from sklearn.metrics import accuracy_score
 from os.path import dirname
 from enum import IntEnum
-from typing import Dict
+from typing import Dict, List, Tuple
 from numpy.typing import ArrayLike
 from llama_cpp import Llama as LLM
 from re import split
-
+import time
+from tqdm import tqdm
 
 @dataclass
 class PromptEvaluatorConfig:
@@ -25,13 +27,16 @@ class PromptEvaluatorConfig:
 
     max_n_thinking_tokens: int
     verbose: bool
+    debug:bool = False
 
     @staticmethod
-    def for_gemma_3_4b_it(max_n_thinking_tokens=1000, verbose=False):
+    def for_gemma_3_4b_it(max_n_thinking_tokens=1000, verbose=False, debug=False):
         return PromptEvaluatorConfig(
             llm_gguf_path=f"{dirname(__file__)}/../../llms/gemma-3-4b-it-q4_0.gguf",
             n_gpu_layers=-1,
-            n_ctx=8192,
+            n_ctx=1024,
+            #n_ctx=8192,
+            # CHANGED THE ABOVE TO MAKE IT FASTER 
             # Parameters from https://docs.unsloth.ai/basics/gemma-3-how-to-run-and-fine-tune
             temperature=1.0,
             top_k=64,
@@ -40,6 +45,7 @@ class PromptEvaluatorConfig:
             stops=["<end_of_turn>"],
             max_n_thinking_tokens=max_n_thinking_tokens,
             verbose=verbose,
+            debug=debug,
         )
 
 
@@ -50,7 +56,7 @@ class Sentiment(IntEnum):
 
 
 @dataclass
-class Prompt:
+class Prompt:  
     template: str
     """
     A string template that guides the text generation and logit evaluation.
@@ -73,6 +79,36 @@ class Prompt:
     """
 
     @staticmethod
+    def prompt_catalogue() -> Dict[str, "Prompt"]: 
+        return {
+        # "direct_v1": Prompt.direct_example(),
+        # "direct_v2": Prompt.second_direct_example(), 
+        # "emoji_example": Prompt.emoji_example(), 
+        ## I will add more here
+        "direct_v3": Prompt(
+            template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+            "positive": Sentiment.POSITIVE,
+            "negative": Sentiment.NEGATIVE,
+            "neutral": Sentiment.NEUTRAL,
+        }),
+        "direct_v4": Prompt(
+            template="<start_of_turn>user\nSentiment classification task. Choose oen of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+            "positive": Sentiment.POSITIVE,
+            "negative": Sentiment.NEGATIVE,
+            "neutral": Sentiment.NEUTRAL,
+        }),
+        "direct_v5": Prompt(
+            template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+            "positive": Sentiment.POSITIVE,
+            "negative": Sentiment.NEGATIVE,
+            "neutral": Sentiment.NEUTRAL,
+        }),
+    }
+
+    @staticmethod
     def direct_example():
         """
         Directly asks the model to classify the sentiment of a text.
@@ -80,6 +116,21 @@ class Prompt:
         """
         return Prompt(
             template="<start_of_turn>user\nYou are an expert in recognizing people's sentiments. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+            },
+        )
+
+    @staticmethod
+    def second_direct_example():
+        """
+        Directly asks the model to classify the sentiment of a text.
+        Uses the <PROBE> evaluator to convert logits to probabilities.
+        """
+        return Prompt(
+            template="<start_of_turn>user\nWhat is the sentiment of this review?\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
             sentiment_map={
                 "positive": Sentiment.POSITIVE,
                 "negative": Sentiment.NEGATIVE,
@@ -278,21 +329,83 @@ class PromptEvaluator:
             # Return normalized sentiment probabilities.
             return sentiment_probabilities / sentiment_probabilities.sum()
 
+        results = []
+        iterator = tqdm(X, desc="Evaluating") if self.config.debug else X
+
+        for x in iterator:
+            if self.config.debug:
+                print(f"\nInput: {x}")
+                start_time = time.time()
+            result = score_single_input(x)
+            if self.config.debug:
+                print(f"Done in {time.time() - start_time:.2f} sec")
+            results.append(result)
+
         return pd.DataFrame(
-            [score_single_input(x) for x in X],
+            results,
             columns=[Sentiment(i).name for i in range(len(Sentiment))],
             index=X,
         )
+        # return pd.DataFrame(
+        #     [score_single_input(x) for x in X],
+        #     columns=[Sentiment(i).name for i in range(len(Sentiment))],
+        #     index=X,
+        # )
 
     def predict(self, prompt: Prompt, X: ArrayLike):
         return self.predict_proba(prompt, X).idxmax(axis=1)
 
+class PromptOptimizer: 
+    config: PromptEvaluatorConfig
+    llm: LLM
+
+    def __init__(
+        self,
+        config: PromptEvaluatorConfig,
+    ):
+        self.config = config
+        self.llm = LLM(
+            model_path=config.llm_gguf_path,
+            n_gpu_layers=config.n_gpu_layers,
+            n_ctx=config.n_ctx,
+            logits_all=True,
+            verbose=config.verbose,
+        )
+
+    def fill_prompt_template(self, prompt: Prompt, input_text: str) -> str:
+        return prompt.template.replace("<INPUT>", input_text)
+
+
+    def evaluate_prompt(self, prompt: Prompt, X: List[str], y_true: List[str]) -> Tuple[List[str], float]:
+        # Runs the model on X using the given prompt, and compares predictions to y_true
+        y_pred = []
+
+        for x in X: 
+            filled_prompt = prompt.template.replace("<INPUT>", x)
+            res = evaluator.llm.create_completion(prompt=filled_prompt, max_tokens=64, stop=[])
+            pred = res["choices"][0]["text"].strip().lower()
+
+            if "positive" in pred:
+                y_pred.append("positive")
+            elif "negative" in pred:
+                y_pred.append("negative")
+            elif "neutral" in pred:
+                y_pred.append("neutral")
+            else:
+                y_pred.append("unknown")
+                print(y_pred)
+
+        accuracy = accuracy_score(
+            [label.lower() for label in y_true],
+            y_pred
+        )
+        return y_pred, accuracy
 
 if __name__ == "__main__":
-    config = PromptEvaluatorConfig.for_gemma_3_4b_it(verbose=False)
+    config = PromptEvaluatorConfig.for_gemma_3_4b_it(verbose=True, debug=True)
     evaluator = PromptEvaluator(config)
+    optimizer = PromptOptimizer(config)
 
-    prompt = Prompt.emoji_example()
     X = [
         "FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
         "I love this movie! It's so good!",
@@ -301,16 +414,31 @@ if __name__ == "__main__":
         "The new pope slays!",
         "Not sure what to think about this.",
         # Test consistency with prediction 1.
-        "FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
+        #"FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
         # Test reuse of prefix. (Set verbose to see the reuse.)
-        "FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
+        #"FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
     ]
 
-    y_proba = evaluator.predict_proba(prompt, X)
+    # True labels, needed to determine ratings of the prompts
+    y_true = ['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL']
+    #TODO: replace X by actual testing, and training dataset
 
-    with pd.option_context("display.float_format", "{:0.4f}".format):
-        print(
-            "--------------------------------------------------------\n",
-            y_proba,
-            "\n--------------------------------------------------------",
-        )
+    # Loading the prompts from the catalogue
+    prompts = Prompt.prompt_catalogue()
+    
+    # Running evaluation for each prompt 
+    for name, prompt in prompts.items(): 
+        print(f"\n--- Evaluating with prompt: {name} ---")
+        y_pred, acc = optimizer.evaluate_prompt(prompt, X, y_true)
+        for x, p, y in zip(X, y_pred, y_true):
+            print(f"Review: {x}\nPred: {p}, True: {y}\n")
+    print(f"Accuracy: {acc:.2f}")
+
+    # with pd.option_context("display.float_format", "{:0.4f}".format):
+    #     print(
+    #         "--------------------------------------------------------\n",
+    #         y_proba,
+    #         "\n--------------------------------------------------------",
+    #         y_proba_2,
+    #         "\n--------------------------------------------------------",
+    #     )
