@@ -524,32 +524,37 @@ if __name__ == "__main__":
     # True labels, needed to determine ratings of the prompts
     y_true = ['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL']
     
+    results = optimizer.evaluate_prompts(prompts, X, y_true)
+    #print(results)
 
+    #fake_results= [('direct_v1', (['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 1.0)), ('direct_v2', (['NEUTRAL', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 0.8333333333333334))]
+    completions = optimizer.optimize_prompts(results, 1)
+    print(completions)
     # Loading the prompts from the catalogue
-    prompts = Prompt.prompt_catalogue()
-    prompts["direct_v1"] = Prompt.direct_example()
-    prompts["direct_v2"] = Prompt.second_direct_example()
-    #prompts["direct_v3"] = Prompt.emoji_example()
+    # prompts = Prompt.prompt_catalogue()
+    # prompts["direct_v1"] = Prompt.direct_example()
+    # prompts["direct_v2"] = Prompt.second_direct_example()
+    # #prompts["direct_v3"] = Prompt.emoji_example()
     
-    # Running evaluation for each prompt 
-    results = []
+    # # Running evaluation for each prompt 
+    # results = []
 
-    for name, prompt in prompts.items(): 
-        print(f"\n--- Evaluating with prompt: {name} ---")
-        y_pred, acc = optimizer.evaluate_prompt(prompt, X, y_true)
-        for x, p, y in zip(X, y_pred, y_true):
-            print(f"Review: {x}\nPred: {p}, True: {y}\n")
-        print(f"Accuracy: {acc:.2f}")
-        true_total = sum(p.upper() == y for p, y in zip(y_pred, y_true))
-        results.append((name, acc, true_total, len(y_true)))
+    # for name, prompt in prompts.items(): 
+    #     print(f"\n--- Evaluating with prompt: {name} ---")
+    #     y_pred, acc = optimizer.evaluate_prompt(prompt, X, y_true)
+    #     for x, p, y in zip(X, y_pred, y_true):
+    #         print(f"Review: {x}\nPred: {p}, True: {y}\n")
+    #     print(f"Accuracy: {acc:.2f}")
+    #     true_total = sum(p.upper() == y for p, y in zip(y_pred, y_true))
+    #     results.append((name, acc, true_total, len(y_true)))
 
-    print("\n=== Summary Table ===")
-    import pandas as pd
-    summary_df = pd.DataFrame(results, columns=["Prompt Name", "Accuracy", "Correct", "Total"])
-    print(summary_df.to_string(index=False))
-    best_row = summary_df.loc[summary_df['Accuracy'].idxmax()]
-    print(f"\n Best Prompt: {best_row['Prompt Name']} with Accuracy: {best_row['Accuracy']:.2f} ({int(best_row['Correct'])}/{int(best_row['Total'])})")
-
+    # print("\n=== Summary Table ===")
+    # import pandas as pd
+    # summary_df = pd.DataFrame(results, columns=["Prompt Name", "Accuracy", "Correct", "Total"])
+    # print(summary_df.to_string(index=False))
+    # best_row = summary_df.loc[summary_df['Accuracy'].idxmax()]
+    # print(f"\n Best Prompt: {best_row['Prompt Name']} with Accuracy: {best_row['Accuracy']:.2f} ({int(best_row['Correct'])}/{int(best_row['Total'])})")
+    
     # with pd.option_context("display.float_format", "{:0.4f}".format):
     #     print(
     #         "--------------------------------------------------------\n",
