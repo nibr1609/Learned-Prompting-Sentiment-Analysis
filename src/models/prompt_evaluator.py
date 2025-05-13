@@ -522,7 +522,7 @@ if __name__ == "__main__":
         # Test reuse of prefix. (Set verbose to see the reuse.)
         #"FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
     ]
-
+    prompts = Prompt.prompt_catalogue()
     # True labels, needed to determine ratings of the prompts
     y_true = ['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL']
     
