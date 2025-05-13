@@ -24,7 +24,7 @@ class BaseSentimentModel(nn.Module):
         raise NotImplementedError("Subclasses must implement forward method")
     
     def evaluate(self, pred, labels):
-        cm = confusion_matrix(labels, pred)
+        cm = confusion_matrix(labels, pred, labels=['positive', 'neutral', 'negative'])
         
         # Avoid division by zero
         FP = cm.sum(axis=0) - np.diag(cm)

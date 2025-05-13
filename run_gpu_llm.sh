@@ -17,7 +17,6 @@ conda activate cil
 
 cd src/models
 
-export DGGML_CUDA=ON
 python3 prompt_evaluator.py
 
 echo "Done."

@@ -46,9 +46,7 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             )
         if config.experiment.max_test_samples:
             ds["test"] = (
-                ds["test"]
-                .shuffle(seed=42)
-                .select(range(config.experiment.max_test_samples))
+                ds["test"].select(range(config.experiment.max_test_samples))
             )
 
         # 3) split off a val fold if requested
@@ -76,7 +74,7 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         ds = ds.map(tokenize, batched=True)
         ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
 
-        return ds["train"], ds["val"] if validation_exists else None, ds["test"]
+        return ds["train"], ds["val"] if validation_exists else None, ds["test"], validation_exists
 
     def train(self, train_ds, val_ds=None):
         model_root_directory = self.config.data.model_output_dir / (self.config.experiment.experiment_name + "_" + self.config.experiment.experiment_id)

@@ -1,0 +1,27 @@
+{
+    "name": "llama_prompt_inf",
+    "model": {
+        "model_name": "xyz",
+        "model_type": "PromptSimpleInferenceModel",
+        "learning_rate": -1,
+        "batch_size": -1,
+        "num_epochs": -1,
+        "weight_decay": -1
+    },
+    "experiment": {
+        "experiment_name": "llama_prompt_inference",
+        "mode": "inference",
+        "max_train_samples": 600,
+        "max_test_samples": 50,
+        "validation_set_split": 0.5,
+        "save_per_epoch": -1,
+        "early_stopping_patience": -1
+    },
+    "data": {
+        "train_path": "../data/training.csv",
+        "test_path": "../data/test.csv",
+        "submission_dir": "../submissions",
+        "experiment_output_dir": "../results/experiments",
+        "model_output_dir": "/work/scratch/nbritz/models"
+    }
+}

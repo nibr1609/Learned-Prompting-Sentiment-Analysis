@@ -25,8 +25,7 @@ class ExperimentRunner:
         print(f"Experiment directory: {self.experiment_dir}")
         self.save_config(config_path)
 
-        self.train_data, self.val_data, self.test_data = self.model.preprocess_dataset(config)
-        self.val_exists = self.val_data != None
+        self.train_data, self.val_data, self.test_data, self.val_exists = self.model.preprocess_dataset(config)
 
     def predict(self) -> np.ndarray:
         if self.val_exists:
