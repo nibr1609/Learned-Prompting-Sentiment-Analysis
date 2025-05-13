@@ -37,7 +37,7 @@ class ExperimentConfig:
     log_interval: int = 100
     max_test_samples: Optional[int] = None
     max_train_samples: Optional[int] = None
-    validation_set_split: Optional[float] = None
+    validation_set_split: Optional[float] = 0.2
     save_per_epoch: int = 4
 
 @dataclass
@@ -62,18 +62,21 @@ def get_default_configs() -> Config:
     
     model_config = ModelConfig(
         model_name="default_model",
-        pretrained=True
+        pretrained=True,
+        model_type="HuggingFaceModel"
     )
 
     experiment_config = ExperimentConfig(
-        experiment_name="default_experiment"
+        experiment_name="default_experiment",
+        mode="inference"
     )
 
     data_config = DataConfig(
         train_path=data_path / "training.csv",
         test_path=data_path / "test.csv",
         submission_dir=base_path / "submissions",
-        experiment_output_dir=base_path / "experiments"
+        experiment_output_dir=base_path / "experiments",
+        model_output_dir="/work/scratch/nbritz/models"
     )
 
     return Config(
