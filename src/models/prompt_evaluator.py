@@ -84,7 +84,7 @@ class Prompt:
         "direct_v1": Prompt.direct_example(),
         "direct_v2": Prompt.second_direct_example(), 
         # "emoji_example": Prompt.emoji_example(), 
-        # # I will add more here
+        #
         # "direct_v3": Prompt(
         #     template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
         #     sentiment_map={
@@ -92,8 +92,8 @@ class Prompt:
         #     "negative": Sentiment.NEGATIVE,
         #     "neutral": Sentiment.NEUTRAL,
         # }),
-        # "direct_v4": Prompt(
-        #     template="<start_of_turn>user\nSentiment classification task. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+         "direct_v4": Prompt(
+             template="<start_of_turn>user\nSentiment classification task. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
             sentiment_map={
             "positive": Sentiment.POSITIVE,
             "negative": Sentiment.NEGATIVE,
@@ -164,11 +164,11 @@ class Prompt:
         }),
         "market_review_style": Prompt(
             template="<start_of_turn>user\nAnalyze the tone of the customer review below as if preparing for a product sentiment report. Reply with one of: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-        #     sentiment_map={
-            #     "positive": Sentiment.POSITIVE,
-            #     "negative": Sentiment.NEGATIVE,
-            #     "neutral": Sentiment.NEUTRAL,
-        # }),
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
     }
 
     @staticmethod
@@ -474,9 +474,11 @@ class PromptOptimizer:
             template = Prompt.prompt_catalogue()[name].template.strip()
             base_prompt_bad += f"Promt {i+1}:\n{template}\n\n"
 
+
+        base_promt_both = base_prompt_bad+base_prompt_good+". Based on these, suggest 2 new prompt templates in a similar style to the good ones, and that work better than the bad ones. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
         base_prompt_good += "Based on these, suggest 2 new prompt templates in a similar style. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
         base_prompt_bad += "Based on these, suggest 2 improved prompt templates, that could work better. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
-        base_promt_both = base_prompt_bad+base_prompt_good+"Based on these, suggest 2 new prompt templates in a similar style to the good ones, and that work better than the bad ones. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
+        
         completions = {}
 
         for label, prompt_text in [("good", base_prompt_good), ("bad", base_prompt_bad)]:
@@ -554,12 +556,4 @@ if __name__ == "__main__":
     # print(summary_df.to_string(index=False))
     # best_row = summary_df.loc[summary_df['Accuracy'].idxmax()]
     # print(f"\n Best Prompt: {best_row['Prompt Name']} with Accuracy: {best_row['Accuracy']:.2f} ({int(best_row['Correct'])}/{int(best_row['Total'])})")
-    
-    # with pd.option_context("display.float_format", "{:0.4f}".format):
-    #     print(
-    #         "--------------------------------------------------------\n",
-    #         y_proba,
-    #         "\n--------------------------------------------------------",
-    #         y_proba_2,
-    #         "\n--------------------------------------------------------",
-    #     )
+
