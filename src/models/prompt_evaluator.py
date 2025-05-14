@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple
 from numpy.typing import ArrayLike
 from llama_cpp import Llama as LLM
 from re import split
+import re
 import time
 from tqdm import tqdm
 
@@ -34,8 +35,8 @@ class PromptEvaluatorConfig:
         return PromptEvaluatorConfig(
             llm_gguf_path=f"{dirname(__file__)}/../../llms/gemma-3-4b-it-q4_0.gguf",
             n_gpu_layers=-1,
-            n_ctx=1024,
-            #n_ctx=8192,
+            #n_ctx=1024,
+            n_ctx=8192,
             # CHANGED THE ABOVE TO MAKE IT FASTER 
             # Parameters from https://docs.unsloth.ai/basics/gemma-3-how-to-run-and-fine-tune
             temperature=1.0,
@@ -85,20 +86,20 @@ class Prompt:
         "direct_v2": Prompt.second_direct_example(), 
         # "emoji_example": Prompt.emoji_example(), 
         #
-        # "direct_v3": Prompt(
-        #     template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-        #     sentiment_map={
-        #     "positive": Sentiment.POSITIVE,
-        #     "negative": Sentiment.NEGATIVE,
-        #     "neutral": Sentiment.NEUTRAL,
-        # }),
+        "direct_v3": Prompt(
+            template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+            "positive": Sentiment.POSITIVE,
+            "negative": Sentiment.NEGATIVE,
+            "neutral": Sentiment.NEUTRAL,
+        }),
          "direct_v4": Prompt(
              template="<start_of_turn>user\nSentiment classification task. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
             sentiment_map={
             "positive": Sentiment.POSITIVE,
             "negative": Sentiment.NEGATIVE,
             "neutral": Sentiment.NEUTRAL,
-        }),
+         }),
         "direct_v4_karltest": Prompt(
             template="<start_of_turn>user\nClassify the sentiment! Choose one of the following sentiments: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
             sentiment_map={
@@ -122,13 +123,13 @@ class Prompt:
         }),
         "direct_v4_assertive": Prompt(
             template="<start_of_turn>user\nClassify the sentiment of this review. Choose only from: positive, negative, or neutral. Do not explain your answer.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-        #     sentiment_map={
-            #     "positive": Sentiment.POSITIVE,
-            #     "negative": Sentiment.NEGATIVE,
-            #     "neutral": Sentiment.NEUTRAL,
-        # }),
-        # "direct_v5": Prompt(
-        #     template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+        }),
+         "direct_v5": Prompt(
+            template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
             sentiment_map={
             "positive": Sentiment.POSITIVE,
             "negative": Sentiment.NEGATIVE,
@@ -170,6 +171,7 @@ class Prompt:
                 "neutral": Sentiment.NEUTRAL,
         }),
     }
+
 
     @staticmethod
     def direct_example():
@@ -427,6 +429,19 @@ class PromptOptimizer:
     def fill_prompt_template(self, prompt: Prompt, input_text: str) -> str:
         return prompt.template.replace("<INPUT>", input_text)
 
+
+    mutable_catalogue = Prompt.prompt_catalogue().copy()
+    
+    def add_prompt(self, label:str, text:str): 
+        self.mutable_catalogue[label] = Prompt(
+            template=text,
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+            },
+        )
+
     def evaluate_prompts(self, prompts: Dict[str, "Prompt"], X: List[str], y_true: List[str]) -> Dict[str, Tuple[List[str], float]]:
         # Runs the model on X using the given prompt, and compares predictions to y_true
         results = {}
@@ -467,42 +482,59 @@ class PromptOptimizer:
         flop_k = prompts[-k:]
 
         for i, (name,_) in enumerate(top_k): 
-            template = Prompt.prompt_catalogue()[name].template.strip()
+            template = Prompt.prompt_catalogue()[name].template.strip().replace("<start_of_turn>", "").replace("<end_of_turn>", "")
             base_prompt_good += f"Promt {i+1}:\n{template}\n\n"
 
         for i, (name,_) in enumerate(flop_k): 
-            template = Prompt.prompt_catalogue()[name].template.strip()
+            template = Prompt.prompt_catalogue()[name].template.strip().replace("<start_of_turn>", "").replace("<end_of_turn>", "")
             base_prompt_bad += f"Promt {i+1}:\n{template}\n\n"
 
-
-        base_promt_both = base_prompt_bad+base_prompt_good+". Based on these, suggest 2 new prompt templates in a similar style to the good ones, and that work better than the bad ones. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
-        base_prompt_good += "Based on these, suggest 2 new prompt templates in a similar style. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
-        base_prompt_bad += "Based on these, suggest 2 improved prompt templates, that could work better. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
-        
+        #base_promt_both = base_prompt_bad+base_prompt_good+". Based on these, suggest 2 new prompt templates in a similar style to the good ones, and that work better than the bad ones. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
+        base_prompt_good += f"Based on these, suggest {k} new prompt templates in a similar style. The goal is to always generate the sentiment of a review as either postive, negative, or neutral. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
+        base_prompt_bad += f"Based on these, suggest {k} improved prompt templates, that could work better. The goal is to always be to generate the sentiment of a review as either postive, negative, or neutral. Only output the new prompts in the following format: Prompt: <Prompt>.  Followed by this literal string: '\n\n<INPUT>\n\n'<end_of_turn>\n<start_of_turn>model\n"
+       
         completions = {}
 
         for label, prompt_text in [("good", base_prompt_good), ("bad", base_prompt_bad)]:
-            for i in range(2): 
+            for i in range(k): 
                 res = self.evaluator.llm.create_completion(
-                    prompt = prompt_text, 
+                    prompt = prompt_text,
                     max_tokens=170, 
                     temperature=0.9,
                     stop=[]
                 )
-            generated = res["choices"][0]["text"].strip()
-            completions[f"{label}_generated_{i+1}"] = generated
+                generated = res["choices"][0]["text"].strip()
+                completions[f"{label}_generated_{i+1}"] = generated
         
-        # trying to give both the good and the bad example
-        result = self.evaluator.llm.create_completion(
-                    prompt = base_promt_both, 
-                    max_tokens=170, 
-                    temperature=0.9,
-                    stop=[]
-                )
+        formatted_completions = self.format_prompts(completions)
 
+        # jetzt iterieren wir durch die flop k und ersetzen die durch die neuen generierten prompts
+        for name, text in flop_k: 
+            self.mutable_catalogue.pop(name)
+        
+        for key, text in formatted_completions.items(): 
+            self.add_prompt(key, text)
 
-        return completions
+        print(self.mutable_catalogue)
 
+        return formatted_completions
+
+# k schlechtesten durch k beste ersetzen
+# mit i angeben wie oft rekursiv verbessern
+
+    def format_prompts(self, completions: Dict[str, "Prompt"]) -> Dict[str, "Prompt"]:
+        
+        generated_prompts = {}
+        counter = 1
+        for key, text in completions.items():
+            prompts = re.findall(r"Prompt:\s*(.*?)(?=Prompt:|$)", text, flags=re.DOTALL)
+            prompts = [p.strip() for p in prompts if p.strip()]
+
+            for i, p in enumerate(prompts):
+                generated_prompts[f"{key}_{i+1}"] = f"<start_of_turn>user\n{p}<end_of_turn>\n<start_of_turn>model\n<PROBE>"
+        return generated_prompts
+
+    #def best_of_best(self, )
 
 
 if __name__ == "__main__":
@@ -522,38 +554,71 @@ if __name__ == "__main__":
         # Test reuse of prefix. (Set verbose to see the reuse.)
         #"FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
     ]
+
+    # Using the first 40 reviews from the training set
+    X_ = [
+    "Those 2 drinks are part of the HK culture and has years of history. It is so bad.",
+    "I was told by the repair company that was doing the car repair that fixing the rim was \"impossible\" and to replace it.",
+    "It is there to give them a good time .",
+    "Like leafing through an album of photos accompanied by the sketchiest of captions .",
+    "Johnny was a talker and liked to have fun.",
+    "It as burnt to a crisp black flavorless",
+    "I called Moveaholics Jason was amazing he even offered to come out that night.",
+    "Is this place expensive?",
+    "It's likely crowded at the busier times so keep that in mind.",
+    "I was just looking at bottom line price and my old Fiat 500 Pop Convertible to be paid off, since I was already pre-approved for a car loan with my credit union.",
+    "So many times I've passed by this cafe and not noticed it.",
+    "When I saw someone in a golf cart I asked him.",
+    "Seriously just fall off the bone.",
+    "These guys don't care for the costumers at all.",
+    "I loved this place.",
+    "You can see all the helpers behind the scenes.",
+    "I swear!",
+    "The car was short.",
+    "There are no little structures for dogs to go through, basically it's just a plot of grassy land for the dogs to run around in.",
+    "Definitely use their green/garlic paste at the front.",
+    "You could tell homemade.",
+    "After all, Vegas has always had an element of kitsch in its public image.",
+    "I highly recommend any location but his.",
+    "Then through out the party she didn't fill up pitchers for the kids and didn't listen to me when I asked her to put everyone's order in our bill.",
+    "They call me at dinnertime.",
+    "I'll take H & H over these any day.",
+    "this time around we skipped combo and ordered individual meat dishes portions were similar but you probably do save few bucks doing combo.",
+    "Nothing frozen.",
+    "This is a film tailor-made for those who when they were in high school would choose the Cliff-Notes over reading a full-length classic .",
+    "The second time it was a bigger guy wth a shaved head who provided excellent customer service.",
+    "Cons: it's true about the \"Law & Order\" or \"CSI\" looking walk to the strip from this hotel.",
+    "he was the toughest player on the team",
+    "Feels like it's been around for too long",
+    "They are just as good at \"soft skills\" as translating.",
+    "But it's not.",
+    "Which NEVER happens!!",
+    "But I also didn't go there to be impressed with fancy decor.",
+    "We tried a new place. We had a seat at the bar and enjoyed two delicious breakfast cocktails.",
+    "The wait time can be a little long (I've never waited less than 1h and never more than 2h30)  and the maître D has been known to  be a little rude when he's overwhelmed with clients.",
+    "An exhausting family drama about a porcelain empire and just as hard a flick as its subject matter .",
+    "Wish they would sell the Stetson Chopped and ship it to me in San Diego..."
+        ]
+    y_true_ = [
+    "negative", "negative", "neutral", "negative", "positive", "negative",
+    "positive", "neutral", "neutral", "neutral", "neutral", "neutral",
+    "positive", "negative", "positive", "neutral", "neutral", "negative",
+    "negative", "positive", "positive", "neutral", "positive", "negative",
+    "neutral", "positive", "positive", "neutral", "negative", "positive",
+    "negative", "neutral", "neutral", "positive", "neutral", "neutral",
+    "negative", "positive", "negative", "neutral", "negative"
+        ]
     prompts = Prompt.prompt_catalogue()
     # True labels, needed to determine ratings of the prompts
     y_true = ['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL']
     
-    results = optimizer.evaluate_prompts(prompts, X, y_true)
-    #print(results)
+    results = optimizer.evaluate_prompts(prompts, X_, y_true_)
+    print(results)
 
-    #fake_results= [('direct_v1', (['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 1.0)), ('direct_v2', (['NEUTRAL', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 0.8333333333333334))]
-    completions = optimizer.optimize_prompts(results, 1)
-    print(completions)
-    # Loading the prompts from the catalogue
-    # prompts = Prompt.prompt_catalogue()
-    # prompts["direct_v1"] = Prompt.direct_example()
-    # prompts["direct_v2"] = Prompt.second_direct_example()
-    # #prompts["direct_v3"] = Prompt.emoji_example()
+    # fake_results= [('direct_v1', (['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 1.0)), ('direct_v2', (['NEUTRAL', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 0.8333333333333334))]
     
-    # # Running evaluation for each prompt 
-    # results = []
-
-    # for name, prompt in prompts.items(): 
-    #     print(f"\n--- Evaluating with prompt: {name} ---")
-    #     y_pred, acc = optimizer.evaluate_prompt(prompt, X, y_true)
-    #     for x, p, y in zip(X, y_pred, y_true):
-    #         print(f"Review: {x}\nPred: {p}, True: {y}\n")
-    #     print(f"Accuracy: {acc:.2f}")
-    #     true_total = sum(p.upper() == y for p, y in zip(y_pred, y_true))
-    #     results.append((name, acc, true_total, len(y_true)))
-
-    # print("\n=== Summary Table ===")
-    # import pandas as pd
-    # summary_df = pd.DataFrame(results, columns=["Prompt Name", "Accuracy", "Correct", "Total"])
-    # print(summary_df.to_string(index=False))
-    # best_row = summary_df.loc[summary_df['Accuracy'].idxmax()]
-    # print(f"\n Best Prompt: {best_row['Prompt Name']} with Accuracy: {best_row['Accuracy']:.2f} ({int(best_row['Correct'])}/{int(best_row['Total'])})")
-
+    # k = 1 in dem Beispiel, damit es schneller läuft
+    completions = optimizer.optimize_prompts(results, 3)
+    print(completions)
+    new_prompts = optimizer.format_prompts(completions)
+    print(new_prompts)

@@ -2,8 +2,8 @@
 #SBATCH --chdir .
 #SBATCH --account=cil_jobs
 #SBATCH --time=24:00:00
-#SBATCH -o /home/%u/logs/slurm_output__%x-%j.out
-#SBATCH --error=/home/%u/logs/slurm_err__%x-%j.err
+#SBATCH -o /home/%u/CILProject2025/logs/slurm_output__%x-%j.out
+#SBATCH --error=/home/%u/CILProject2025/logs/slurm_err__%x-%j.err
 #SBATCH --mail-type=FAIL
 
 set -e
