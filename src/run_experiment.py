@@ -4,6 +4,7 @@ from typing import Dict, Any
 import argparse
 from config.config import Config, ModelConfig, ExperimentConfig, DataConfig
 from models.huggingface_model import BERTHuggingFaceModel
+from models.prompt_simple_inference_model import PromptSimpleInferenceModel
 from experiments.experiment_runner import ExperimentRunner
 from utils.submission_creation import create_submission
 
@@ -37,7 +38,8 @@ def get_model_class(model_type: str):
     """Get the appropriate model class based on the model name."""
     # TODO: Load class directly
     model_classes = {
-        "HuggingFaceModel": BERTHuggingFaceModel
+        "HuggingFaceModel": BERTHuggingFaceModel,
+        "PromptSimpleInferenceModel": PromptSimpleInferenceModel
     }
     return model_classes.get(model_type)
 
