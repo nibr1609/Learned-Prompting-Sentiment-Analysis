@@ -11,6 +11,7 @@ from re import split
 import re
 import time
 from tqdm import tqdm
+import csv
 
 @dataclass
 class PromptEvaluatorConfig:
@@ -178,14 +179,14 @@ class Prompt:
                 "neutral": Sentiment.NEUTRAL,
         }),
         "direct_v4_shorter": Prompt(
-            template="<start_of_turn>user\nClassify the sentiment: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            template="<start_of_turn>user\nClassify the sentiment: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>\\",
             sentiment_map={
                 "positive": Sentiment.POSITIVE,
                 "negative": Sentiment.NEGATIVE,
                 "neutral": Sentiment.NEUTRAL,
         }),
         "direct_v4_assertive": Prompt(
-            template="<start_of_turn>user\nClassify the sentiment of this review. Choose only from: positive, negative, or neutral. Do not explain your answer.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            template="<start_of_turn>user\nClassify the sentiment of this review. Choose only from: positive, negative, or neutral. Do not explain your answer.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>\\",
             sentiment_map={
                 "positive": Sentiment.POSITIVE,
                 "negative": Sentiment.NEGATIVE,
@@ -485,7 +486,6 @@ class PromptOptimizer:
     def fill_prompt_template(self, prompt: Prompt, input_text: str) -> str:
         return prompt.template.replace("<INPUT>", input_text)
 
-
     mutable_catalogue = Prompt.prompt_catalogue().copy()
     
     def add_prompt(self, label:str, text:str): 
@@ -498,16 +498,23 @@ class PromptOptimizer:
             },
         )
 
-    def evaluate_prompts(self, prompts: Dict[str, "Prompt"], X: List[str], y_true: List[str]) -> Dict[str, Tuple[List[str], float]]:
+    def evaluate_prompts(self, X: List[str], y_true: List[str]) -> Dict[str, Tuple[List[str], float]]:
         # Runs the model on X using the given prompt, and compares predictions to y_true
         results = {}
-
-        for name, prompt in prompts.items(): 
-            print(f"\n--- Evaluating with prompt: {name} ---")
-
+        prompts = pd.read_csv('../../data/prompt_catalogue.csv')
+        for idx, row in prompts.iterrows():
+            print(f"\n--- Evaluating with prompt: {row["idx"]} ---")
+            # creating prompts out of the string prompts
+            prompt = Prompt(
+             template=row["prompt"].replace("Prompt(template='", "").replace("sentiment_map={'positive': <Sentiment.POSITIVE: 0>, 'negative': <Sentiment.NEGATIVE: 2>, 'neutral': <Sentiment.NEUTRAL: 1>}), \"", ""),
+             sentiment_map={
+             "positive": Sentiment.POSITIVE,
+             "negative": Sentiment.NEGATIVE,
+             "neutral": Sentiment.NEUTRAL,
+            })
             # Run model
             y_proba = evaluator.predict_proba(prompt, X)
-
+            
             with pd.option_context("display.float_format", "{:0.4f}".format):
                 print(
                 "--------------------------------------------------------\n",
@@ -520,65 +527,76 @@ class PromptOptimizer:
 
             # Compute accuracy
             accuracy = accuracy_score([label.lower() for label in y_true], [pred.lower() for pred in y_pred])
-            results[name] = (y_pred, accuracy)
+            results[idx] = (y_pred, accuracy)
+            row["accuracy"] = accuracy
+
             print(f"Accuracy: {accuracy:.2f}")
-            print(pd.DataFrame({"Text": X, "Pred": y_pred, "True": y_true}))
+            #print(pd.DataFrame({"Text": X, "Pred": y_pred, "True": y_true}))
         
         # Save all predictions to a DataFrame
-        predictions_df = pd.DataFrame({
-            "Text": X,
-            "True": y_true,
-        })
-        for name, (y_pred, _) in results.items():
-            predictions_df[name] = y_pred
+        # predictions_df = pd.DataFrame({
+        #     "Text": X,
+        #     "True": y_true,
+        # })
+        # for name, (y_pred, _) in results.items():
+        #     predictions_df[name] = y_pred
 
-        predictions_df.to_csv("promptcatalouge_:100_predictions.csv", index=False)
-        print("\nSaved all predictions to all_prompt_predictions.csv")
+        # predictions_df.to_csv("promptcatalouge_:100_predictions.csv", index=False)
+        # print("\nSaved all predictions to all_prompt_predictions.csv")
 
-        # Sort prompts based on highest accuracy
+        # Sort prompts based on highest accuracy 
+        # store the prompt accuracy in the csv 
         sorted_results = sorted(results.items(), key=lambda x: x[1][1], reverse=True)
+        
         for name, (y_pred, acc) in sorted_results:
             print(f"{name}: {acc:.2f}")
 
         # Identify the samples most commonly misclassified across prompts
-        error_counts = {}
-        mislabel_counts = {}
-        for name, (y_pred, _) in results.items():
-            for i, (pred, true) in enumerate(zip(y_pred, y_true)):
-                if pred.lower() != true.lower():
-                    error_counts[i] = error_counts.get(i, 0) + 1
-                    # Track wrong label distribution
-                    mislabel_counts.setdefault(i, {})
-                    mislabel = pred
-                    mislabel_counts[i][mislabel] = mislabel_counts[i].get(mislabel, 0) + 1
+        # error_counts = {}
+        # mislabel_counts = {}
+        # for name, (y_pred, _) in results.items():
+        #     for i, (pred, true) in enumerate(zip(y_pred, y_true)):
+        #         if pred.lower() != true.lower():
+        #             error_counts[i] = error_counts.get(i, 0) + 1
+        #             # Track wrong label distribution
+        #             mislabel_counts.setdefault(i, {})
+        #             mislabel = pred
+        #             mislabel_counts[i][mislabel] = mislabel_counts[i].get(mislabel, 0) + 1
 
-        sorted_errors = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
-        print("\nMost commonly misclassified examples:")
-        for idx, count in sorted_errors[:10]:  # show top 10 most wrong
-            mislabels = mislabel_counts.get(idx, {})
-            print(f"Index {idx} | Misclassified by {count} prompts | Text: {X[idx]} | True: {y_true[idx]} | Mislabels: {mislabels}")
-
+        # sorted_errors = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
+        # print("\nMost commonly misclassified examples:")
+        # for idx, count in sorted_errors[:10]:  # show top 10 most wrong
+        #     mislabels = mislabel_counts.get(idx, {})
+        #     print(f"Index {idx} | Misclassified by {count} prompts | Text: {X[idx]} | True: {y_true[idx]} | Mislabels: {mislabels}")
+        
+        prompts.to_csv('../../data/prompt_catalogue.csv', index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar='\n')
         return sorted_results 
     
     def optimize_prompts(self, prompts: Dict[str, Tuple[List[str], float]], k:int) -> Dict[str, "Prompt"]: 
         # nimmt die sortierten Resultate, gibt die ersten und letzten k an das completion modell
         base_prompt_good = "<start_of_turn>user\nHere are some really good prompts:"
         base_prompt_bad = "<start_of_turn>user\nHere are some prompts that don't work well:"
-        top_k = prompts[:k]
-        flop_k = prompts[-k:]
+        
+        prompts = pd.read_csv('../../data/prompt_catalogue.csv')
+        
+        # Weil das im csv zu Problemen führt, ersetzen wir beim Lesen und schreiben \n durch \Line
+        top_k = prompts['prompt'].str.replace("\Line", "\n")[:k]
+        flop_k = prompts['prompt'].str.replace("\Line", "\n")[-k:]
 
-        for i, (name,_) in enumerate(top_k): 
-            template = Prompt.prompt_catalogue()[name].template.strip().replace("<start_of_turn>", "").replace("<end_of_turn>", "")
-            base_prompt_good += f"Promt {i+1}:\n{template}\n\n"
+        for i, name in enumerate(top_k): 
+            template = top_k.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
+            print(template)
+            base_prompt_good += f"Prompt {i+1}:\n{template}\n\n"
 
-        for i, (name,_) in enumerate(flop_k): 
-            template = Prompt.prompt_catalogue()[name].template.strip().replace("<start_of_turn>", "").replace("<end_of_turn>", "")
-            base_prompt_bad += f"Promt {i+1}:\n{template}\n\n"
+        for i, name in enumerate(flop_k): 
+            template = flop_k.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
+            print(template)
+            base_prompt_bad += f"Prompt {i+1}:\n{template}\n\n"
 
-        #base_promt_both = base_prompt_bad+base_prompt_good+". Based on these, suggest 2 new prompt templates in a similar style to the good ones, and that work better than the bad ones. The goal should always be to generate the sentiment of a review as either postive, negative, or neutral. Use the literal string '<start_of_turn>' to begin your prompt, and the literal string '<end_of_turn>' to end your prompt.\n<end_of_turn>\n<start_of_turn>model\n"
-        base_prompt_good += f"Based on these, suggest {k} new prompt templates in a similar style. The goal is to always generate the sentiment of a review as either postive, negative, or neutral. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
-        base_prompt_bad += f"Based on these, suggest {k} improved prompt templates, that could work better. The goal is to always be to generate the sentiment of a review as either postive, negative, or neutral. Only output the new prompts in the following format: Prompt: <Prompt>.  Followed by this literal string: '\n\n<INPUT>\n\n'<end_of_turn>\n<start_of_turn>model\n"
-       
+        
+        base_prompt_good += f"Based on these, suggest {k} new prompt templates in a similar style. The goal is to always generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
+        base_prompt_bad += f"Based on these, suggest {k} improved prompt templates, that could work better. The goal is to always be to generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. Only output the new prompts in the following format: Prompt: <Prompt>.  Followed by this literal string: '\n\n<INPUT>\n\n'<end_of_turn>\n<start_of_turn>model\n"
+
         completions = {}
 
         for label, prompt_text in [("good", base_prompt_good), ("bad", base_prompt_bad)]:
@@ -594,22 +612,10 @@ class PromptOptimizer:
         
         formatted_completions = self.format_prompts(completions)
 
-        # jetzt iterieren wir durch die flop k und ersetzen die durch die neuen generierten prompts
-        for name, text in flop_k: 
-            self.mutable_catalogue.pop(name)
-        
-        for key, text in formatted_completions.items(): 
-            self.add_prompt(key, text)
-
-        print(self.mutable_catalogue)
-
         return formatted_completions
 
-# k schlechtesten durch k beste ersetzen
-# mit i angeben wie oft rekursiv verbessern
 
     def format_prompts(self, completions: Dict[str, "Prompt"]) -> Dict[str, "Prompt"]:
-        
         generated_prompts = {}
         counter = 1
         for key, text in completions.items():
@@ -617,86 +623,21 @@ class PromptOptimizer:
             prompts = [p.strip() for p in prompts if p.strip()]
 
             for i, p in enumerate(prompts):
-                generated_prompts[f"{key}_{i+1}"] = f"<start_of_turn>user\n{p}<end_of_turn>\n<start_of_turn>model\n<PROBE>"
+                generated_prompts[f"{key}_{i+1}"] = f"<start_of_turn>user\Line{p}<end_of_turn>\Line<start_of_turn>model\Line<PROBE>"
+                with open('../../data/prompt_catalogue.csv','a') as pc:
+                    f = csv.writer(pc)
+                    unique_id = int(time.time()*100)
+                    f.writerow([f'{key}_{unique_id}',generated_prompts[f"{key}_{i+1}"].replace("\n", "\Line"), ""])
         return generated_prompts
-
-    #def best_of_best(self, )
 
 
 if __name__ == "__main__":
     config = PromptEvaluatorConfig.for_gemma_3_4b_it(verbose=True, debug=True)
     evaluator = PromptEvaluator(config)
     optimizer = PromptOptimizer(evaluator)
-
-    X = [
-        "FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
-        "I love this movie! It's so good!",
-        "This movie is okay, not great but not bad either.",
-        "I don't like this movie at all. It's terrible!",
-        "The new pope slays!",
-        "Not sure what to think about this.",
-        # Test consistency with prediction 1.
-        #"FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
-        # Test reuse of prefix. (Set verbose to see the reuse.)
-        #"FUCKING HATE THIS MOVIE! it sucks so bad... is what I would say if I was a loser. But actually, I love it!",
-    ]
-
-    # Using the first 40 reviews from the training set
-    X_ = [
-    "Those 2 drinks are part of the HK culture and has years of history. It is so bad.",
-    "I was told by the repair company that was doing the car repair that fixing the rim was \"impossible\" and to replace it.",
-    "It is there to give them a good time .",
-    "Like leafing through an album of photos accompanied by the sketchiest of captions .",
-    "Johnny was a talker and liked to have fun.",
-    "It as burnt to a crisp black flavorless",
-    "I called Moveaholics Jason was amazing he even offered to come out that night.",
-    "Is this place expensive?",
-    "It's likely crowded at the busier times so keep that in mind.",
-    "I was just looking at bottom line price and my old Fiat 500 Pop Convertible to be paid off, since I was already pre-approved for a car loan with my credit union.",
-    "So many times I've passed by this cafe and not noticed it.",
-    "When I saw someone in a golf cart I asked him.",
-    "Seriously just fall off the bone.",
-    "These guys don't care for the costumers at all.",
-    "I loved this place.",
-    "You can see all the helpers behind the scenes.",
-    "I swear!",
-    "The car was short.",
-    "There are no little structures for dogs to go through, basically it's just a plot of grassy land for the dogs to run around in.",
-    "Definitely use their green/garlic paste at the front.",
-    "You could tell homemade.",
-    "After all, Vegas has always had an element of kitsch in its public image.",
-    "I highly recommend any location but his.",
-    "Then through out the party she didn't fill up pitchers for the kids and didn't listen to me when I asked her to put everyone's order in our bill.",
-    "They call me at dinnertime.",
-    "I'll take H & H over these any day.",
-    "this time around we skipped combo and ordered individual meat dishes portions were similar but you probably do save few bucks doing combo.",
-    "Nothing frozen.",
-    "This is a film tailor-made for those who when they were in high school would choose the Cliff-Notes over reading a full-length classic .",
-    "The second time it was a bigger guy wth a shaved head who provided excellent customer service.",
-    "Cons: it's true about the \"Law & Order\" or \"CSI\" looking walk to the strip from this hotel.",
-    "he was the toughest player on the team",
-    "Feels like it's been around for too long",
-    "They are just as good at \"soft skills\" as translating.",
-    "But it's not.",
-    "Which NEVER happens!!",
-    "But I also didn't go there to be impressed with fancy decor.",
-    "We tried a new place. We had a seat at the bar and enjoyed two delicious breakfast cocktails.",
-    "The wait time can be a little long (I've never waited less than 1h and never more than 2h30)  and the maître D has been known to  be a little rude when he's overwhelmed with clients.",
-    "An exhausting family drama about a porcelain empire and just as hard a flick as its subject matter .",
-    "Wish they would sell the Stetson Chopped and ship it to me in San Diego..."
-        ]
-    y_true_ = [
-    "negative", "negative", "neutral", "negative", "positive", "negative",
-    "positive", "neutral", "neutral", "neutral", "neutral", "neutral",
-    "positive", "negative", "positive", "neutral", "neutral", "negative",
-    "negative", "positive", "positive", "neutral", "positive", "negative",
-    "neutral", "positive", "positive", "neutral", "negative", "positive",
-    "negative", "neutral", "neutral", "positive", "neutral", "neutral",
-    "negative", "positive", "negative", "neutral", "negative"
-        ]
     prompts = Prompt.prompt_catalogue()
     # True labels, needed to determine ratings of the prompts
-    prompts.pop("emoji_example", None)
+    # prompts.pop("emoji_example", None)
 
     df = pd.read_csv("../../data/training.csv")
     X = df["sentence"].tolist()
@@ -704,14 +645,18 @@ if __name__ == "__main__":
     sample_size = 100
     X = X[:sample_size]
     y_true = y_true[:sample_size]
+    #prompts = pd.from_csv("")
     
-    results = optimizer.evaluate_prompts(prompts, X_, y_true_)
-    print(results)
-
-    # fake_results= [('direct_v1', (['POSITIVE', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 1.0)), ('direct_v2', (['NEUTRAL', 'POSITIVE', 'NEUTRAL', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'], 0.8333333333333334))]
+    X_ = [
+        'I called Moveaholics Jason was amazing he even offered to come out that night.',
+        'I called Moveaholics Jason was truly spectacular, but he offered to come out that night.',
+        'I called Moveaholics Jason was medium he even offered to come out that night.',
+        'I called Moveaholics Jason was shit he even offered to come out that night.'
+    ]
+    y_true_ = ['positive', 'positive', 'neutral', 'negative']
     
-    # k = 1 in dem Beispiel, damit es schneller läuft
-    completions = optimizer.optimize_prompts(results, 3)
+    results = optimizer.evaluate_prompts(X, y_true)
+    completions = optimizer.optimize_prompts(results, 10)
     print(completions)
     new_prompts = optimizer.format_prompts(completions)
     print(new_prompts)
