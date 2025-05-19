@@ -6,12 +6,13 @@ from os.path import dirname
 from enum import IntEnum
 from typing import Dict, List, Tuple
 from numpy.typing import ArrayLike
-from llama_cpp import Llama as LLM
+from llama_cpp import Llama as LLM, llama_kv_self_clear
 from re import split
 import re
 import time
 from tqdm import tqdm
 import csv
+
 
 @dataclass
 class PromptEvaluatorConfig:
@@ -29,16 +30,16 @@ class PromptEvaluatorConfig:
 
     max_n_thinking_tokens: int
     verbose: bool
-    debug:bool = False
+    debug: bool = False
 
     @staticmethod
     def for_gemma_3_4b_it(max_n_thinking_tokens=1000, verbose=False, debug=False):
         return PromptEvaluatorConfig(
             llm_gguf_path=f"{dirname(__file__)}/../../llms/gemma-3-4b-it-q4_0.gguf",
             n_gpu_layers=-1,
-            #n_ctx=1024,
+            # n_ctx=1024,
             n_ctx=8192,
-            # CHANGED THE ABOVE TO MAKE IT FASTER 
+            # CHANGED THE ABOVE TO MAKE IT FASTER
             # Parameters from https://docs.unsloth.ai/basics/gemma-3-how-to-run-and-fine-tune
             temperature=1.0,
             top_k=64,
@@ -58,7 +59,7 @@ class Sentiment(IntEnum):
 
 
 @dataclass
-class Prompt:  
+class Prompt:
     template: str
     """
     A string template that guides the text generation and logit evaluation.
@@ -81,154 +82,172 @@ class Prompt:
     """
 
     @staticmethod
-    def prompt_catalogue() -> Dict[str, "Prompt"]: 
+    def prompt_catalogue() -> Dict[str, "Prompt"]:
         return {
-        "direct_v1": Prompt.direct_example(),
-        "direct_v2": Prompt.second_direct_example(), 
-        "emoji_example": Prompt.emoji_example(), 
-        
-        "direct_v3": Prompt(
-             template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-             sentiment_map={
-             "positive": Sentiment.POSITIVE,
-             "negative": Sentiment.NEGATIVE,
-             "neutral": Sentiment.NEUTRAL,
-         }),
-         "direct_v4": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4longV1": Prompt(
-            template="<start_of_turn>user\nYou are an expert in recognizing people's sentiments. Most of the text you see will be reviews. If there is a negative word in the sentence, that is not enough to say negative. Same for positive. If you are unsure if positive or neutral, rather take neutral. If you are unsure if negative or neutral, rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4longV2": Prompt(
-            template="<start_of_turn>user\nYou are an expert in recognizing people's sentiments. Most of the text you see will be from the internet. If there is a positive word in the sentence, that is not enough to say positive. Same for negative. If you are unsure if positive or neutral, rather take neutral. If you are unsure if negative or neutral, rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4longV3": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. Most of the text you see will be reviews. If there is a positive word in the sentence, that is not enough to say positive. If there is a negative word in the sentence, that is not enough to say negative. If you are unsure if positive or neutral, rather take neutral. If you are unsure if negative or neutral, rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4longV4": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. Most of the text you see will be reviews. If there is a positive word in the sentence, that is not enough to say positive. If there is a negative word in the sentence, that is not enough to say negative. If you are unure rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-         "direct_v4internet": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. These are sentences from the internet. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4crowdaware": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. These are sentecnes from the internet. It is common for people to use different writingstyles on the internet. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4extrasarcasm": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. There can be some sarcasam pay attention to this. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4carefully": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. Choose carefully one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4nosinglewordpred": Prompt(
-            template="<start_of_turn>user\nSentiment classification task. Dont let yourself be influenced by single words too much. Aanalyze the sentence as a whole. Choose carefully one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4_karltest": Prompt(
-            template="<start_of_turn>user\nClassify the sentiment! Choose one of the following sentiments: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4_emphatic": Prompt(
-            template="<start_of_turn>user\nThis is a sentiment classification task. Your job is to carefully determine whether the review is positive, negative, or neutral. Respond with only one word.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4_shorter": Prompt(
-            template="<start_of_turn>user\nClassify the sentiment: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>\\",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v4_assertive": Prompt(
-            template="<start_of_turn>user\nClassify the sentiment of this review. Choose only from: positive, negative, or neutral. Do not explain your answer.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>\\",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-        }),
-        "direct_v5": Prompt(
-            template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-            "positive": Sentiment.POSITIVE,
-            "negative": Sentiment.NEGATIVE,
-            "neutral": Sentiment.NEUTRAL,
-        }),
-        "thoughtful_analyst": Prompt(
-            template="<start_of_turn>user\nPlease act as a sentiment analysis expert. Assess the following text and reply with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-        }),
-        "professional_opinion": Prompt(
-            template="<start_of_turn>user\nGive a professional sentiment judgment for this review: positive, negative, or neutral?\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-        }),
-        "sarcasm_aware": Prompt(
-            template="<start_of_turn>user\nBe cautious of irony and sarcasm. Is the sentiment of the following review positive, negative, or neutral?\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-        }),
-        "market_review_style": Prompt(
-            template="<start_of_turn>user\nAnalyze the tone of the customer review below as if preparing for a product sentiment report. Reply with one of: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-        }),
-    }
-
+            "direct_v1": Prompt.direct_example(),
+            "direct_v2": Prompt.second_direct_example(),
+            "emoji_example": Prompt.emoji_example(),
+            "direct_v3": Prompt(
+                template="<start_of_turn>user\nCan you analyze the sentiment in this review? Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4longV1": Prompt(
+                template="<start_of_turn>user\nYou are an expert in recognizing people's sentiments. Most of the text you see will be reviews. If there is a negative word in the sentence, that is not enough to say negative. Same for positive. If you are unsure if positive or neutral, rather take neutral. If you are unsure if negative or neutral, rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4longV2": Prompt(
+                template="<start_of_turn>user\nYou are an expert in recognizing people's sentiments. Most of the text you see will be from the internet. If there is a positive word in the sentence, that is not enough to say positive. Same for negative. If you are unsure if positive or neutral, rather take neutral. If you are unsure if negative or neutral, rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4longV3": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. Most of the text you see will be reviews. If there is a positive word in the sentence, that is not enough to say positive. If there is a negative word in the sentence, that is not enough to say negative. If you are unsure if positive or neutral, rather take neutral. If you are unsure if negative or neutral, rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4longV4": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. Most of the text you see will be reviews. If there is a positive word in the sentence, that is not enough to say positive. If there is a negative word in the sentence, that is not enough to say negative. If you are unure rather take neutral. Be careful of sarcasm. Reply only with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4internet": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. These are sentences from the internet. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4crowdaware": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. These are sentecnes from the internet. It is common for people to use different writingstyles on the internet. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4extrasarcasm": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. There can be some sarcasam pay attention to this. Choose one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4carefully": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. Choose carefully one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4nosinglewordpred": Prompt(
+                template="<start_of_turn>user\nSentiment classification task. Dont let yourself be influenced by single words too much. Aanalyze the sentence as a whole. Choose carefully one of the following: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4_karltest": Prompt(
+                template="<start_of_turn>user\nClassify the sentiment! Choose one of the following sentiments: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4_emphatic": Prompt(
+                template="<start_of_turn>user\nThis is a sentiment classification task. Your job is to carefully determine whether the review is positive, negative, or neutral. Respond with only one word.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4_shorter": Prompt(
+                template="<start_of_turn>user\nClassify the sentiment: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>\\",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v4_assertive": Prompt(
+                template="<start_of_turn>user\nClassify the sentiment of this review. Choose only from: positive, negative, or neutral. Do not explain your answer.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>\\",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "direct_v5": Prompt(
+                template="<start_of_turn>user\nWhat is the sentiment of this review? Choose oen of the following: positive, negative, or neutral. Pay attention to irony and sarcasm!\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "thoughtful_analyst": Prompt(
+                template="<start_of_turn>user\nPlease act as a sentiment analysis expert. Assess the following text and reply with one word: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "professional_opinion": Prompt(
+                template="<start_of_turn>user\nGive a professional sentiment judgment for this review: positive, negative, or neutral?\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "sarcasm_aware": Prompt(
+                template="<start_of_turn>user\nBe cautious of irony and sarcasm. Is the sentiment of the following review positive, negative, or neutral?\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+            "market_review_style": Prompt(
+                template="<start_of_turn>user\nAnalyze the tone of the customer review below as if preparing for a product sentiment report. Reply with one of: positive, negative, or neutral.\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            ),
+        }
 
     @staticmethod
     def direct_example():
@@ -339,6 +358,9 @@ class PromptEvaluator:
 
         # Reset the LLM and evaluate the beginning of sequence token.
         self.llm.reset()
+        self.llm.input_ids.fill(-1)
+        self.llm.scores.fill(0)
+        llama_kv_self_clear(self.llm.ctx)
         self.llm.eval([self.llm.token_bos()])
 
         def score_single_input(x: str) -> np.ndarray:
@@ -477,6 +499,7 @@ class PromptEvaluator:
     def predict(self, prompt: Prompt, X: ArrayLike):
         return self.predict_proba(prompt, X).idxmax(axis=1)
 
+
 class PromptOptimizer:
     def __init__(self, evaluator: PromptEvaluator):
         self.evaluator = evaluator
@@ -487,8 +510,8 @@ class PromptOptimizer:
         return prompt.template.replace("<INPUT>", input_text)
 
     mutable_catalogue = Prompt.prompt_catalogue().copy()
-    
-    def add_prompt(self, label:str, text:str): 
+
+    def add_prompt(self, label: str, text: str):
         self.mutable_catalogue[label] = Prompt(
             template=text,
             sentiment_map={
@@ -498,39 +521,51 @@ class PromptOptimizer:
             },
         )
 
-    def evaluate_prompts(self, X: List[str], y_true: List[str]) -> Dict[str, Tuple[List[str], float]]:
+    def evaluate_prompts(
+        self, X: List[str], y_true: List[str]
+    ) -> Dict[str, Tuple[List[str], float]]:
         # Runs the model on X using the given prompt, and compares predictions to y_true
         results = {}
-        prompts = pd.read_csv('../../data/prompt_catalogue.csv')
+        prompts = pd.read_csv("../../data/prompt_catalogue.csv")
         for idx, row in prompts.iterrows():
             print(f"\n--- Evaluating with prompt: {row["idx"]} ---")
             # creating prompts out of the string prompts
             prompt = Prompt(
-             template=row["prompt"].replace("Prompt(template='", "").replace("sentiment_map={'positive': <Sentiment.POSITIVE: 0>, 'negative': <Sentiment.NEGATIVE: 2>, 'neutral': <Sentiment.NEUTRAL: 1>}), \"", ""),
-             sentiment_map={
-             "positive": Sentiment.POSITIVE,
-             "negative": Sentiment.NEGATIVE,
-             "neutral": Sentiment.NEUTRAL,
-            })
+                template=row["prompt"]
+                .replace("Prompt(template='", "")
+                .replace(
+                    "sentiment_map={'positive': <Sentiment.POSITIVE: 0>, 'negative': <Sentiment.NEGATIVE: 2>, 'neutral': <Sentiment.NEUTRAL: 1>}), \"",
+                    "",
+                ),
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            )
             # Run model
             y_proba = evaluator.predict_proba(prompt, X)
-            
+
             with pd.option_context("display.float_format", "{:0.4f}".format):
                 print(
-                "--------------------------------------------------------\n",
-                y_proba,
-                "\n--------------------------------------------------------",
+                    "--------------------------------------------------------\n",
+                    y_proba,
+                    "\n--------------------------------------------------------",
                 )
 
             # Get predicted labels
             y_pred = y_proba.idxmax(axis=1).tolist()
 
             # Compute accuracy
-            accuracy = accuracy_score([label.lower() for label in y_true], [pred.lower() for pred in y_pred])
+            accuracy = accuracy_score(
+                [label.lower() for label in y_true], [pred.lower() for pred in y_pred]
+            )
             results[idx] = (y_pred, accuracy)
             #results["accuracy"] = accuracy
 
             print(f"Accuracy: {accuracy:.2f}")
+            # print(pd.DataFrame({"Text": X, "Pred": y_pred, "True": y_true}))
+
         
         # Save all predictions to a DataFrame
         # predictions_df = pd.DataFrame({
@@ -548,6 +583,10 @@ class PromptOptimizer:
         #sorted_results = sorted(results.items(), key=lambda x: x[1][1], reverse=True)
         filtered_results = {k: v for k, v in results.items() if isinstance(k, int)}
         sorted_results = sorted(filtered_results.items(), key=lambda x: x[1][1], reverse=True)
+
+        # Sort prompts based on highest accuracy
+        # store the prompt accuracy in the csv
+        sorted_results = sorted(results.items(), key=lambda x: x[1][1], reverse=True)
 
         for name, (y_pred, acc) in sorted_results:
             print(f"{name}: {acc:.2f}")
@@ -569,11 +608,18 @@ class PromptOptimizer:
         # for idx, count in sorted_errors[:10]:  # show top 10 most wrong
         #     mislabels = mislabel_counts.get(idx, {})
         #     print(f"Index {idx} | Misclassified by {count} prompts | Text: {X[idx]} | True: {y_true[idx]} | Mislabels: {mislabels}")
-        
-        prompts.to_csv('../../data/prompt_catalogue.csv', index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar='\n')
-        return sorted_results 
-    
-    def optimize_prompts(self, prompts: Dict[str, Tuple[List[str], float]], k:int) -> Dict[str, "Prompt"]: 
+
+        prompts.to_csv(
+            "../../data/prompt_catalogue.csv",
+            index=False,
+            quoting=csv.QUOTE_NONNUMERIC,
+            escapechar="\n",
+        )
+        return sorted_results
+
+    def optimize_prompts(
+        self, prompts: Dict[str, Tuple[List[str], float]], k: int
+    ) -> Dict[str, "Prompt"]:
         # nimmt die sortierten Resultate, gibt die ersten und letzten k an das completion modell
         base_prompt_good = "<start_of_turn>user\nHere are some really good prompts:"
         base_prompt_bad = "<start_of_turn>user\nHere are some prompts that don't work well:"
@@ -581,16 +627,18 @@ class PromptOptimizer:
         prompts = pd.read_csv('../../data/prompt_catalogue.csv')
         
         # Weil das im csv zu Problemen führt, ersetzen wir beim Lesen und schreiben \n durch \Line
-        top_k = prompts['prompt'].str.replace("\Line", "\n")[:k]
-        flop_k = prompts['prompt'].str.replace("\Line", "\n")[-k:]
+        top_k = prompts["prompt"].str.replace("\Line", "\n")[:k]
+        flop_k = prompts["prompt"].str.replace("\Line", "\n")[-k:]
 
-        for i, name in enumerate(top_k): 
+        for i, name in enumerate(top_k):
             template = top_k.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
             print(template)
             base_prompt_good += f"Prompt {i+1}:\n{template}\n\n"
 
-        for i, name in enumerate(flop_k): 
-            template = flop_k.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
+        for i, name in enumerate(flop_k):
+            template = flop_k.replace("<start_of_turn>", "").replace(
+                "<end_of_turn>", ""
+            )
             print(template)
             base_prompt_bad += f"Prompt {i+1}:\n{template}\n\n"
 
@@ -603,18 +651,14 @@ class PromptOptimizer:
         for label, prompt_text in [("good", base_prompt_good), ("bad", base_prompt_bad), ("count", count_base_prompt)]:
             for i in range(k): 
                 res = self.evaluator.llm.create_completion(
-                    prompt = prompt_text,
-                    max_tokens=170, 
-                    temperature=0.9,
-                    stop=[]
+                    prompt=prompt_text, max_tokens=170, temperature=0.9, stop=[]
                 )
                 generated = res["choices"][0]["text"].strip()
                 completions[f"{label}_generated_{i+1}"] = generated
-        
+
         formatted_completions = self.format_prompts(completions)
 
         return formatted_completions
-
 
     def format_prompts(self, completions: Dict[str, "Prompt"]) -> Dict[str, "Prompt"]:
         generated_prompts = {}
@@ -624,11 +668,19 @@ class PromptOptimizer:
             prompts = [p.strip() for p in prompts if p.strip()]
 
             for i, p in enumerate(prompts):
-                generated_prompts[f"{key}_{i+1}"] = f"<start_of_turn>user\Line{p}<end_of_turn>\Line<start_of_turn>model\Line<PROBE>"
-                with open('../../data/prompt_catalogue.csv','a') as pc:
+                generated_prompts[f"{key}_{i+1}"] = (
+                    f"<start_of_turn>user\Line{p}<end_of_turn>\Line<start_of_turn>model\Line<PROBE>"
+                )
+                with open("../../data/prompt_catalogue.csv", "a") as pc:
                     f = csv.writer(pc)
-                    unique_id = int(time.time()*100)
-                    f.writerow([f'{key}_{unique_id}',generated_prompts[f"{key}_{i+1}"].replace("\n", "\Line"), ""])
+                    unique_id = int(time.time() * 100)
+                    f.writerow(
+                        [
+                            f"{key}_{unique_id}",
+                            generated_prompts[f"{key}_{i+1}"].replace("\n", "\Line"),
+                            "",
+                        ]
+                    )
         return generated_prompts
 
 
@@ -646,16 +698,16 @@ if __name__ == "__main__":
     sample_size = 3
     X = X[:sample_size]
     y_true = y_true[:sample_size]
-    #prompts = pd.from_csv("")
-    
+    # prompts = pd.from_csv("")
+
     X_ = [
-        'I called Moveaholics Jason was amazing he even offered to come out that night.',
-        'I called Moveaholics Jason was truly spectacular, but he offered to come out that night.',
-        'I called Moveaholics Jason was medium he even offered to come out that night.',
-        'I called Moveaholics Jason was shit he even offered to come out that night.'
+        "I called Moveaholics Jason was amazing he even offered to come out that night.",
+        "I called Moveaholics Jason was truly spectacular, but he offered to come out that night.",
+        "I called Moveaholics Jason was medium he even offered to come out that night.",
+        "I called Moveaholics Jason was shit he even offered to come out that night.",
     ]
-    y_true_ = ['positive', 'positive', 'neutral', 'negative']
-    
+    y_true_ = ["positive", "positive", "neutral", "negative"]
+
     results = optimizer.evaluate_prompts(X, y_true)
     completions = optimizer.optimize_prompts(results, 10)
     print(completions)

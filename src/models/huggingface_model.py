@@ -63,7 +63,7 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         # 4) tokenize & set torch format
         def tokenize(batch):
             toks = self.tokenizer(
-                batch["sentence"], padding="max_length", truncation=True
+                batch["sentence"], padding=True, truncation=True
             )
             toks["labels"] = [
                 {"negative": 0, "neutral": 1, "positive": 2, None:None}[lab]
@@ -150,7 +150,12 @@ class BERTHuggingFaceModel(BaseSentimentModel):
                 logging_strategy="no",
                 save_strategy="no",
             )
-            self.trainer = Trainer(model=self.model, args=args)
+            if not hasattr(self, "data_collator"):
+                self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer, pad_to_multiple_of=8)
+
+            self.trainer = Trainer(model=self.model, args=args, data_collator=self.data_collator)
+
+            
 
         val_logits = None
         if val_ds is not None:
