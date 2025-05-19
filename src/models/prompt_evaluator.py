@@ -528,7 +528,7 @@ class PromptOptimizer:
         results = {}
         prompts = pd.read_csv("../../data/prompt_catalogue.csv")
         for idx, row in prompts.iterrows():
-            print(f"\n--- Evaluating with prompt: {row["idx"]} ---")
+            print(f"\n--- Evaluating with prompt: {row['idx']} ---")
             # creating prompts out of the string prompts
             prompt = Prompt(
                 template=row["prompt"]
@@ -564,58 +564,135 @@ class PromptOptimizer:
             prompts.loc[idx, "accuracy"] = accuracy
 
             print(f"Accuracy: {accuracy:.2f}")
-            # print(pd.DataFrame({"Text": X, "Pred": y_pred, "True": y_true}))
+            #print(f"Predictions: {y_pred}")
+            #print(f"True labels: {y_true}")
 
-        
-        # Save all predictions to a DataFrame
-        # predictions_df = pd.DataFrame({
-        #     "Text": X,
-        #     "True": y_true,
-        # })
-        # for name, (y_pred, _) in results.items():
-        #     predictions_df[name] = y_pred
-
-        # predictions_df.to_csv("../../data/promptcatalogue_100_predictions.csv", index=False)
-        # print("\nSaved all predictions to all_prompt_predictions.csv")
-
-        #Sort prompts by accuracy 
-        # return both the accuracy and the prompts that correspond.  
-        #sorted_results = sorted(results.items(), key=lambda x: x[1][1], reverse=True)
-        filtered_results = {k: v for k, v in results.items() if isinstance(k, int)}
-        sorted_results = sorted(filtered_results.items(), key=lambda x: x[1][1], reverse=True)
-
-        # Sort prompts based on highest accuracy
-        # store the prompt accuracy in the csv
-        sorted_results = sorted(results.items(), key=lambda x: x[1][1], reverse=True)
-
-        for name, (y_pred, acc) in sorted_results:
-            print(f"{name}: {acc:.2f}")
-
-        # Identify the samples most commonly misclassified across prompts
-        # error_counts = {}
-        # mislabel_counts = {}
-        # for name, (y_pred, _) in results.items():
-        #     for i, (pred, true) in enumerate(zip(y_pred, y_true)):
-        #         if pred.lower() != true.lower():
-        #             error_counts[i] = error_counts.get(i, 0) + 1
-        #             # Track wrong label distribution
-        #             mislabel_counts.setdefault(i, {})
-        #             mislabel = pred
-        #             mislabel_counts[i][mislabel] = mislabel_counts[i].get(mislabel, 0) + 1
-
-        # sorted_errors = sorted(error_counts.items(), key=lambda x: x[1], reverse=True)
-        # print("\nMost commonly misclassified examples:")
-        # for idx, count in sorted_errors[:10]:  # show top 10 most wrong
-        #     mislabels = mislabel_counts.get(idx, {})
-        #     print(f"Index {idx} | Misclassified by {count} prompts | Text: {X[idx]} | True: {y_true[idx]} | Mislabels: {mislabels}")
-
+        # Save all predictions to the DataFrame
         prompts.to_csv(
             "../../data/prompt_catalogue.csv",
             index=False,
             quoting=csv.QUOTE_NONNUMERIC,
             escapechar="\n",
         )
-        return sorted_results
+
+        # Use greedy selection to find best combination of 24 prompts
+        best_prompts = self.greedy_select_prompts(results, X, y_true, k=4)
+        
+        # Print detailed information about selected prompts
+        print("\nSelected prompts and their individual accuracies:")
+        for prompt_id, (predictions, accuracy) in best_prompts.items():
+            print(f"Prompt {prompt_id}:")
+            print(f"  Accuracy: {accuracy:.4f}")
+            print(f"  Predictions: {predictions}")
+            print(f"  True labels: {y_true}")
+        
+        return best_prompts
+
+    def greedy_select_prompts(
+        self, 
+        results: Dict[str, Tuple[List[str], float]], 
+        X: List[str], 
+        y_true: List[str], 
+        k: int = 24
+    ) -> Dict[str, Tuple[List[str], float]]:
+        """
+        Greedy algorithm to select the best combination of k prompts.
+        For each sample, we select the best performing prompt from the set.
+        
+        Args:
+            results: Dictionary mapping prompt IDs to (predictions, accuracy) tuples
+            X: Input texts
+            y_true: True labels
+            k: Number of prompts to select
+            
+        Returns:
+            Dictionary of selected prompts with their predictions and accuracies
+        """
+        # Initialize empty set S
+        S = set()
+        selected_results = {}
+        
+        # Convert y_true to lowercase for consistent comparison
+        y_true_lower = [label.lower() for label in y_true]
+        
+        # Function to evaluate accuracy of a set of prompts
+        def evaluate_set(prompt_set):
+            if not prompt_set:
+                return 0.0, []  # Return empty list for best_prompt_per_sample when set is empty
+                
+            # For each sample, find the best prompt in the set
+            correct_predictions = 0
+            best_prompt_per_sample = []
+            
+            for i in range(len(X)):
+                best_prompt_for_sample = None
+                best_prediction = None
+                
+                # Find the prompt that gives the correct prediction for this sample
+                for prompt_id in prompt_set:
+                    predictions = results[prompt_id][0]
+                    if predictions[i].lower() == y_true_lower[i]:
+                        best_prompt_for_sample = prompt_id
+                        best_prediction = predictions[i]
+                        break
+                
+                # If no prompt got it right, find the one that's most confident
+                if best_prompt_for_sample is None:
+                    for prompt_id in prompt_set:
+                        predictions = results[prompt_id][0]
+                        if best_prediction is None or predictions[i] != 'neutral':  # Prefer non-neutral predictions
+                            best_prompt_for_sample = prompt_id
+                            best_prediction = predictions[i]
+                
+                best_prompt_per_sample.append(best_prompt_for_sample)
+                if best_prediction.lower() == y_true_lower[i]:
+                    correct_predictions += 1
+            
+            accuracy = correct_predictions / len(X)
+            return accuracy, best_prompt_per_sample
+        
+        # Main greedy selection loop
+        for j in range(k):
+            best_improvement = -float('inf')
+            best_prompt = None
+            best_prompt_per_sample = None
+            
+            # Try each remaining prompt
+            for prompt_id in results:
+                if prompt_id not in S:
+                    # Calculate improvement when adding this prompt
+                    current_score, _ = evaluate_set(S)
+                    new_score, new_best_prompts = evaluate_set(S | {prompt_id})
+                    improvement = new_score - current_score
+                    
+                    if improvement > best_improvement:
+                        best_improvement = improvement
+                        best_prompt = prompt_id
+                        best_prompt_per_sample = new_best_prompts
+            
+            # Add best prompt to set
+            if best_prompt is not None:
+                S.add(best_prompt)
+                selected_results[best_prompt] = results[best_prompt]
+                print(f"\nSelected prompt {best_prompt} with improvement {best_improvement:.4f}")
+                print("Best prompt per sample distribution:")
+                prompt_counts = {}
+                for prompt in best_prompt_per_sample:
+                    prompt_counts[prompt] = prompt_counts.get(prompt, 0) + 1
+                for prompt, count in prompt_counts.items():
+                    print(f"  Prompt {prompt}: {count} samples")
+        
+        # Print final evaluation
+        final_score, final_best_prompts = evaluate_set(S)
+        print(f"\nFinal ensemble accuracy: {final_score:.4f}")
+        print("Final best prompt per sample distribution:")
+        prompt_counts = {}
+        for prompt in final_best_prompts:
+            prompt_counts[prompt] = prompt_counts.get(prompt, 0) + 1
+        for prompt, count in prompt_counts.items():
+            print(f"  Prompt {prompt}: {count} samples")
+        
+        return selected_results
 
     def optimize_prompts(
         self, prompts: Dict[str, Tuple[List[str], float]], k: int
@@ -636,9 +713,7 @@ class PromptOptimizer:
             base_prompt_good += f"Prompt {i+1}:\n{template}\n\n"
 
         for i, name in enumerate(flop_k):
-            template = flop_k.replace("<start_of_turn>", "").replace(
-                "<end_of_turn>", ""
-            )
+            template = flop_k.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
             print(template)
             base_prompt_bad += f"Prompt {i+1}:\n{template}\n\n"
 
@@ -695,7 +770,7 @@ if __name__ == "__main__":
     df = pd.read_csv("../../data/training.csv")
     X = df["sentence"].tolist()
     y_true = [label.upper() for label in df["label"]]
-    sample_size = 3
+    sample_size = 10
     X = X[:sample_size]
     y_true = y_true[:sample_size]
     # prompts = pd.from_csv("")
@@ -707,9 +782,9 @@ if __name__ == "__main__":
         "I called Moveaholics Jason was shit he even offered to come out that night.",
     ]
     y_true_ = ["positive", "positive", "neutral", "negative"]
-
     results = optimizer.evaluate_prompts(X, y_true)
+    #print(results)
     completions = optimizer.optimize_prompts(results, 10)
     print(completions)
-    new_prompts = optimizer.format_prompts(completions)
-    print(new_prompts)
+    #new_prompts = optimizer.format_prompts(completions)
+    #print(new_prompts)
