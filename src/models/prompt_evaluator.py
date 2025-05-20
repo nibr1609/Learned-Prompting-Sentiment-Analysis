@@ -761,6 +761,7 @@ class PromptOptimizer:
         base_prompt_good = "<start_of_turn>user\nHere are some really good prompts:"
         base_prompt_bad = "<start_of_turn>user\nHere are some prompts that don't work well:"
         count_base_prompt = "<start_of_turn>user\nHere is an example of a prompt I would give an expert to generate a sentiment mapping from a sentence to emojis: I would like to use a subset of the following emojis to summarize my sentiment: 🥰, 😘, 🤗, 😎, 👍, 🧐, ✍, 👀, 🤐, 😶, 🙄, 😪, 😢, 😡, 💩\nThis is a sentence without emojis where I express my sentiment<INPUT>. I want you to produce 15 similar prompts, that also use these emojis to summarize the emotions found in the text. Make the prompt very long and precise. You can include examples, such as : for this negative word, use this emoji. Make the prompts, such that each prompt works well for certain types of reviews. Not all prompts have to classify all reviews well. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
+
         prompts = pd.read_csv('../../data/current_prompt_catalogue.csv')
         
         # Weil das im csv zu Problemen führt, ersetzen wir beim Lesen und schreiben \n durch \Line
@@ -768,18 +769,19 @@ class PromptOptimizer:
         flop_k = prompts["prompt"].str.replace("\Line", "\n")[-k:]
 
         for i, name in enumerate(top_k):
-            template = top_k.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
+            template = name.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
             print(template)
             base_prompt_good += f"Prompt {i+1}:\n{template}\n\n"
 
         for i, name in enumerate(flop_k):
-            template = flop_k.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
+            template = name.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
             print(template)
             base_prompt_bad += f"Prompt {i+1}:\n{template}\n\n"
 
         
-        base_prompt_good += f"Based on these, suggest {k} new prompt templates in a similar style. The goal is to always generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Always include in your prompt that the output should be negative, positive or neutral, nothing more. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. For example this sentence: 'I highly recommend any location but his.' should be classified as negative. This sentence:'They are just as good at 'soft skills' as translating.' should be classified as positive. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
-        base_prompt_bad += f"Based on these, suggest {k} improved prompt templates, that could work better. The goal is to always be to generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Always include in your prompt that the output should be negative, positive or neutral, nothing more. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. For example this sentence: 'I highly recommend any location but his.' should be classified as negative. This sentence: They are just as good at 'soft skills' as translating.' should be classified as positive. Only output the new prompts in the following format: Prompt: <Prompt>.  Followed by this literal string: '\n\n<INPUT>\n\n'<end_of_turn>\n<start_of_turn>model\n"
+        base_prompt_good += f"Based on these, suggest exactly 1 new prompt templates in a similar style. The goal is to always generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Always include in your prompt that the output should be negative, positive or neutral, nothing more. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. For example this sentence: 'I highly recommend any location but his.' should be classified as negative. This sentence:'They are just as good at 'soft skills' as translating.' should be classified as positive. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
+        base_prompt_bad += f"Based on these, suggest exactly 1 improved prompt templates, that could work better. The goal is to always be to generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Always include in your prompt that the output should be negative, positive or neutral, nothing more. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. For example this sentence: 'I highly recommend any location but his.' should be classified as negative. This sentence: They are just as good at 'soft skills' as translating.' should be classified as positive. Only output the new prompts in the following format: Prompt: <Prompt>.  Followed by this literal string: '\n\n<INPUT>\n\n'<end_of_turn>\n<start_of_turn>model\n"
+        count_base_prompt += f"Based on these, suggest exactly 1 improved prompt templates, that could work better."
 
         completions = {}
 
