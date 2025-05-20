@@ -558,11 +558,25 @@ class PromptOptimizer:
     def evaluate_prompts(
         self, X: List[str], y_true: List[str]
     ) -> Dict[str, Tuple[List[str], float]]:
-        # Runs the model on X using the given prompt, and compares predictions to y_true
+        # Add caching logic at the beginning
+        import os
+        cache_path = "../../data/prompt_eval_cache.csv"
+        cache_df = pd.read_csv(cache_path) if os.path.exists(cache_path) else pd.DataFrame(columns=["idx", "accuracy", "predictions"])
+
         results = {}
         prompts = pd.read_csv("../../data/current_prompt_catalogue.csv")
+
+        # Convert cache to dictionary for fast lookup
+        cached_results = {row["idx"]: (eval(row["predictions"]), row["accuracy"]) for _, row in cache_df.iterrows()}
+
         for idx, row in prompts.iterrows():
             print(f"\n--- Evaluating with prompt: {row['idx']} ---")
+            # Use cache if available
+            if row["idx"] in cached_results:
+                print(f"Using cached result for {row['idx']}")
+                results[idx] = cached_results[row["idx"]]
+                prompts.loc[idx, "accuracy"] = cached_results[row["idx"]][1]
+                continue
             # creating prompts out of the string prompts
             prompt = Prompt(
                 template=row["prompt"]
@@ -598,16 +612,17 @@ class PromptOptimizer:
             prompts.loc[idx, "accuracy"] = accuracy
 
             print(f"Accuracy: {accuracy:.2f}")
-            #print(f"Predictions: {y_pred}")
-            #print(f"True labels: {y_true}")
 
-        # Save all predictions to the DataFrame
-        # prompts.to_csv(
-        #     "../../data/prompt_catalogue.csv",
-        #     index=False,
-        #     quoting=csv.QUOTE_NONNUMERIC,
-        #     escapechar="\n",
-        # )
+        # Update the cache file with all current results
+        new_cache_df = pd.DataFrame([
+            {
+                "idx": prompts.iloc[int(prompt_id)]["idx"],
+                "accuracy": accuracy,
+                "predictions": str(predictions)
+            }
+            for prompt_id, (predictions, accuracy) in results.items()
+        ])
+        new_cache_df.to_csv(cache_path, index=False)
 
         # Sort prompts by accuracy descending
         sorted_results = dict(sorted(results.items(), key=lambda item: item[1][1], reverse=True))
@@ -877,4 +892,4 @@ if __name__ == "__main__":
     evaluator = PromptEvaluator(config)
     optimizer = PromptOptimizer(evaluator)
 
-    optimizer.run_optimization_loop(sample_size=2, n_iterations=2, new_prompts_per_class=8) #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24
+    optimizer.run_optimization_loop(sample_size=20, n_iterations=3, new_prompts_per_class=8) #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24
