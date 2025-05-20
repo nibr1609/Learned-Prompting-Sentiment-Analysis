@@ -832,44 +832,49 @@ class PromptOptimizer:
 
         return generated_prompts
 
+    def run_optimization_loop(self, sample_size=None, n_iterations = 10, new_prompts_per_class=8)-> Dict[str, Tuple[List[str], float]]:
+
+        # Export base prompts first
+        Prompt.export_base_prompts_to_csv()
+
+        df = pd.read_csv("../../data/training.csv")
+        X = df["sentence"].tolist()
+        y_true = [label.upper() for label in df["label"]]
+        if sample_size:
+            X = X[:sample_size]
+            y_true = y_true[:sample_size]
+
+        # Initialize catalogues with base prompts
+        base_prompts = pd.read_csv("../../data/base_prompts.csv")
+        base_prompts.to_csv("../../data/prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+        base_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+        print("Initialized catalogues with base prompts")
+
+        # Optimization loop
+        results = optimizer.evaluate_prompts(X, y_true)
+        for iteration in range(n_iterations):
+            print(f"\n=== Starting Optimization Iteration {iteration + 1}/{n_iterations} ===")
+
+            # Generate new prompts based on best ones
+            completions = optimizer.optimize_prompts(results, new_prompts_per_class)  # Will add 3k entries k per class
+            print(f"\nGenerated new prompts for iteration {iteration + 1}")
+            
+            # Evaluate current prompts and get best ones
+            results = optimizer.evaluate_prompts(X, y_true)
+            print(f"\nCompleted evaluation for iteration {iteration + 1}")
+            
+            print(f"\n=== Completed Optimization Iteration {iteration + 1}/{n_iterations} ===")
+
+        print("\nOptimization complete!")
+        print("Final best prompts are in current_prompt_catalogue.csv")
+        print("All generated prompts are in prompt_catalogue.csv")
+        return results
+
 
 if __name__ == "__main__":
+
     config = PromptEvaluatorConfig.for_gemma_3_4b_it(verbose=True, debug=True)
     evaluator = PromptEvaluator(config)
     optimizer = PromptOptimizer(evaluator)
 
-    # Export base prompts first
-    Prompt.export_base_prompts_to_csv()
-
-    df = pd.read_csv("../../data/training.csv")
-    X = df["sentence"].tolist()
-    y_true = [label.upper() for label in df["label"]]
-    sample_size = 3
-    X = X[:sample_size]
-    y_true = y_true[:sample_size]
-
-    # Initialize catalogues with base prompts
-    base_prompts = pd.read_csv("../../data/base_prompts.csv")
-    base_prompts.to_csv("../../data/prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
-    base_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
-    print("Initialized catalogues with base prompts")
-
-    # Optimization loop
-    n_iterations = 2  # Number of optimization iterations
-    results = optimizer.evaluate_prompts(X, y_true)
-    for iteration in range(n_iterations):
-        print(f"\n=== Starting Optimization Iteration {iteration + 1}/{n_iterations} ===")
-
-        # Generate new prompts based on best ones
-        completions = optimizer.optimize_prompts(results, 3)  # Will add 4k entries: 2k bad and 2k good
-        print(f"\nGenerated new prompts for iteration {iteration + 1}")
-        
-        # Evaluate current prompts and get best ones
-        results = optimizer.evaluate_prompts(X, y_true)
-        print(f"\nCompleted evaluation for iteration {iteration + 1}")
-        
-        print(f"\n=== Completed Optimization Iteration {iteration + 1}/{n_iterations} ===")
-
-    print("\nOptimization complete!")
-    print("Final best prompts are in current_prompt_catalogue.csv")
-    print("All generated prompts are in prompt_catalogue.csv")
+    optimizer.run_optimization_loop(sample_size=2, n_iterations=2, new_prompts_per_class=8) #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24
