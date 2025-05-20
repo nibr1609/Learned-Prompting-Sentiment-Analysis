@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 from typing import Dict, Any
 import argparse
-from config.config import Config, ModelConfig, ExperimentConfig, DataConfig
+from config.config import Config, ModelConfig, ExperimentConfig, DataConfig, PromptConfig
 from models.huggingface_model import BERTHuggingFaceModel
-from models.prompt_simple_inference_model import PromptSimpleInferenceModel
+from models.two_stage_model import TwoStageModel
 from experiments.experiment_runner import ExperimentRunner
 from utils.submission_creation import create_submission
 
@@ -26,12 +26,14 @@ def create_config_from_json(config_dict: Dict[str, Any]) -> Config:
     model_config = ModelConfig(**config_dict['model'])
     experiment_config = ExperimentConfig(**config_dict['experiment'])
     data_config = DataConfig(**config_dict['data'])
+    prompt_config = PromptConfig(**config_dict['prompt'])
     
     # Combine into single config
     return Config(
         model=model_config,
         experiment=experiment_config,
-        data=data_config
+        data=data_config,
+        prompt=prompt_config
     )
 
 def get_model_class(model_type: str):
@@ -39,7 +41,7 @@ def get_model_class(model_type: str):
     # TODO: Load class directly
     model_classes = {
         "HuggingFaceModel": BERTHuggingFaceModel,
-        "PromptSimpleInferenceModel": PromptSimpleInferenceModel
+        "TwoStageModel": TwoStageModel
     }
     return model_classes.get(model_type)
 

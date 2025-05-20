@@ -1,18 +1,19 @@
 {
-    "name": "roberta_experiment",
+    "name": "deberta_experiment",
     "model": {
-        "model_name": "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        "model_name": "Elron/deberta-v3-large-sentiment",
         "model_type": "HuggingFaceModel",
-        "learning_rate": 1e-5,
-        "batch_size": 16,
-        "num_epochs": 10,
+        "learning_rate": 1e-6,
+        "batch_size": 4,
+        "num_epochs": 5,
         "weight_decay": 0.01
     },
     "experiment": {
-        "experiment_name": "roberta",
+        "experiment_name": "deberta",
         "mode": "train_inference",
-        "max_train_samples": 30000,
-        "validation_set_split": 0.03,
+        "num_workers": 4,
+        "max_train_samples": 40000,
+        "validation_set_split": 0.05,
         "save_per_epoch": 3,
         "early_stopping_patience": 3
     },
@@ -22,5 +23,6 @@
         "submission_dir": "../submissions",
         "experiment_output_dir": "../results/experiments",
         "model_output_dir": "/work/scratch/nbritz/models"
-    }
+    },
+    "prompt": {}
 }

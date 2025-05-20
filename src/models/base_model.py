@@ -36,8 +36,16 @@ class BaseSentimentModel(nn.Module):
         fp_rate_per_class = FP / (FP + TN + 1e-10)  # add small value to avoid div by 0
         macro_fp_rate = fp_rate_per_class.mean()
 
+        def nmae(y_true, y_pred):
+            sentiment_to_int = {"negative": 0, "neutral": 1, "positive": 2}
+            y_true = np.array([sentiment_to_int[s] for s in y_true])
+            y_pred = np.array([sentiment_to_int[s] for s in y_pred])
+            mae = np.mean(np.abs(y_true - y_pred))
+            return float(0.5 * (2 - mae))
+
         metrics = {
             "accuracy": accuracy_score(labels, pred),
+            "nmae": nmae(labels, pred),
             "precision_macro": precision_score(labels, pred, average='macro', zero_division=0),
             "recall_macro": recall_score(labels, pred, average='macro', zero_division=0),
             "f1_macro": f1_score(labels, pred, average='macro', zero_division=0),

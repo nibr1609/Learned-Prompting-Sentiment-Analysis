@@ -21,6 +21,7 @@ source /cluster/courses/cil/envs/miniforge3/etc/profile.d/conda.sh
 conda activate cil
 
 cd src
+export HF_HOME="/work/scratch/nbritz/cache"
 python3 run_experiment.py -c "$CONFIG_ARG"
 
 echo "Done."

@@ -55,6 +55,10 @@ class ExperimentRunner:
                 self.save_validation_metrics(metrics)
 
 
+        if self.config.experiment.mode == "inference_multiple_prompts":
+            pass
+
+
         create_submission(test_pred, self.config)
 
     

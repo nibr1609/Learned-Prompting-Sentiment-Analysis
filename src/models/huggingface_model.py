@@ -14,17 +14,17 @@ import evaluate
 import pandas as pd
 from math import ceil
 from transformers import DataCollatorWithPadding
+from transformers import DebertaV2Tokenizer
 
 class BERTHuggingFaceModel(BaseSentimentModel):
     def __init__(self, config: Config):
         super().__init__(config)
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model.model_name)
+        self.config = config
+        self.tokenizer = self.load_tokenizer()
         self.model = AutoModelForSequenceClassification.from_pretrained(
             config.model.model_name,
             num_labels=3,
         )
-        self.config = config
-
         if torch.cuda.is_available():
             print(f"Using GPU: {torch.cuda.get_device_name(0)}")
         else:
@@ -60,19 +60,41 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             ds["train"] = split_ds["train"]
             ds["val"]   = split_ds["test"]
 
-        # 4) tokenize & set torch format
+        if "label" in ds["test"].column_names:
+            ds["test"] = ds["test"].remove_columns("label")
+
+        label2id = {"negative": 0, "neutral": 1, "positive": 2}
+
         def tokenize(batch):
-            toks = self.tokenizer(
-                batch["sentence"], padding=True, truncation=True
-            )
-            toks["labels"] = [
-                {"negative": 0, "neutral": 1, "positive": 2, None:None}[lab]
-                for lab in batch["label"]
-            ]
+            toks = self.tokenizer(batch["sentence"],
+                                padding=True, truncation=True)
+            # only add labels if they exist in this batch
+            if "label" in batch and batch["label"] is not None:
+                toks["labels"] = [
+                    label2id[lab] if isinstance(lab, str) else int(lab)
+                    for lab in batch["label"]
+                ]
             return toks
 
         ds = ds.map(tokenize, batched=True)
-        ds.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+
+        # now set torch format per-split
+        # train always has labels
+        ds["train"].set_format(
+            type="torch",
+            columns=["input_ids", "attention_mask", "labels"]
+        )
+        # if you have a validation split
+        if "val" in ds:
+            ds["val"].set_format(
+                type="torch",
+                columns=["input_ids", "attention_mask", "labels"]
+            )
+        # test has no labels, so leave them off
+        ds["test"].set_format(
+            type="torch",
+            columns=["input_ids", "attention_mask"]
+        )
 
         return ds["train"], ds["val"] if validation_exists else None, ds["test"], validation_exists
 
@@ -106,7 +128,7 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             eval_strategy="steps",
             eval_steps=eval_save_steps,
             save_steps=eval_save_steps,
-            save_total_limit = 5,
+            save_total_limit = 3,
             label_names=["labels"],
             load_best_model_at_end = True,
             metric_for_best_model = "f1",
@@ -160,6 +182,8 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         val_logits = None
         if val_ds is not None:
             val_logits = self.trainer.predict(val_ds).predictions
+
+        print(test_ds)
         test_logits  = self.trainer.predict(test_ds).predictions
         return test_logits, val_logits
     
@@ -186,3 +210,12 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         metrics = super().evaluate(pred, true_labels)
         print(metrics)
         return metrics
+    
+    def load_tokenizer(self):
+        # No fast tokenizer available for deberta
+        if self.config.model.model_name == "microsoft/deberta-v3-large":
+            tokenizer =DebertaV2Tokenizer.from_pretrained(self.config.model.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(self.config.model.model_name)
+
+        return tokenizer
+

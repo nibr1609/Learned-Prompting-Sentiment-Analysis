@@ -39,6 +39,8 @@ class ExperimentConfig:
     max_train_samples: Optional[int] = None
     validation_set_split: Optional[float] = 0.2
     save_per_epoch: int = 4
+    two_stage_setting: Optional[str] = ""
+    selector_eval_setting: Optional[str] = ""
 
 @dataclass
 class DataConfig:
@@ -50,11 +52,17 @@ class DataConfig:
     val_split: float = 0.1
     random_state: int = 42
 
+
+@dataclass
+class PromptConfig:
+    prompt_list: List[str] = None
+
 @dataclass
 class Config:
     model: ModelConfig
     experiment: ExperimentConfig
     data: DataConfig
+    prompt: PromptConfig
 
 def get_default_configs() -> Config:
     base_path = Path(__file__).parent.parent.parent
@@ -79,8 +87,11 @@ def get_default_configs() -> Config:
         model_output_dir="/work/scratch/nbritz/models"
     )
 
+    prompt_config = PromptConfig()
+
     return Config(
         model=model_config,
         experiment=experiment_config,
-        data=data_config
+        data=data_config,
+        prompt=prompt_config
     ) 

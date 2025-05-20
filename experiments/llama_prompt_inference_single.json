@@ -1,0 +1,42 @@
+{
+    "name": "llama_prompt_inf",
+    "model": {
+        "model_name": "xyz",
+        "model_type": "TwoStageModel",
+        "learning_rate": -1,
+        "batch_size": -1,
+        "num_epochs": -1,
+        "weight_decay": -1
+    },
+    "experiment": {
+        "experiment_name": "llama_prompt_inference",
+        "mode": "inference_multiple_prompts",
+        "max_train_samples": 50,
+        "validation_set_split": 0.2,
+        "max_test_samples": 100,
+        "save_per_epoch": -1,
+        "early_stopping_patience": -1,
+        "two_stage_setting": "direct_inference"
+    },
+    "data": {
+        "train_path": "../data/training.csv",
+        "test_path": "../data/test.csv",
+        "submission_dir": "../submissions",
+        "experiment_output_dir": "../results/experiments",
+        "model_output_dir": "/work/scratch/nbritz/models"
+    },
+    "prompt": {
+        "prompt_list": [
+            "You are a highly skilled sentiment analysis expert specializing in analyzing online customer reviews for e-commerce businesses. Categorize it as definitively either positive, negative, or neutral. ",
+            "You are a highly experienced sentiment analysis expert specializing in analyzing online reviews of restaurants. Provide a concise sentiment classification – “positive”, “negative”, or “neutral”. Do not include any explanations or justifications; simply state the sentiment. ",
+            "Sentiment classification task. There can be some sarcasam pay attention to this. Choose one of the following: positive, negative, or neutral.",
+            "You are a professional brand monitor tasked with assessing customer feedback. Your role is to categorize the sentiment of each review as either positive, negative, or neutral. Your response MUST be limited to a single word: positive, negative, or neutral. Prioritize accuracy above all else.",
+            "Sentiment classification task. Dont let yourself be influenced by single words too much. Analyze the sentence as a whole. Choose carefully one of the following: positive, negative, or neutral.",
+            "You are a highly experienced sentiment analysis expert specializing in analyzing whether people find prices appropriate. Provide a concise sentiment classification – “positive”, “negative”, or “neutral”. Do not include any explanations or justifications; simply state the sentiment. ",
+            "Do a sentiment classification task. Specialize on people's emotion such as anger or joy. Provide a concise sentiment classification – “positive”, “negative”, or “neutral”. Do not include any explanations or justifications; simply state the sentiment. ",
+            "You are a highly skilled sentiment analysis expert. You will receive reviews about movies. Answer with one word: 'positive', 'negative', or 'neutral'. ",
+            "You are a highly skilled sentiment analysis expert. Focus on double negations in sentences. Answer with one word: 'positive', 'negative', or 'neutral'. ",
+            "You are a highly skilled sentiment analysis expert. Your task is to read sentences and determine the sentiment expressed. The sentiment should be classified as either 'positive', 'negative', or 'neutral'. Provide only the single word sentiment classification."
+        ]
+    }
+}
