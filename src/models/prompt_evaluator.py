@@ -248,6 +248,36 @@ class Prompt:
                 },
             ),
         }
+    
+    @staticmethod
+    def random_example():
+        """
+        Directly asks the model to classify the sentiment of a text.
+        Uses the <PROBE> evaluator to convert logits to probabilities.
+        """
+        return Prompt(
+            template="<start_of_turn>user\nRandomly reply only with one word: positive, negative, or neutral.  \n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+            sentiment_map={
+                "positive": Sentiment.POSITIVE,
+                "negative": Sentiment.NEGATIVE,
+                "neutral": Sentiment.NEUTRAL,
+            },
+        )
+    
+    @staticmethod
+    def load_prompts(prompt_list_str):
+        prompt_list = {}
+        for i, prompt_str in enumerate(prompt_list_str):
+            prompt = Prompt(
+                template=f"<start_of_turn>user\n{prompt_str}\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
+                sentiment_map={
+                    "positive": Sentiment.POSITIVE,
+                    "negative": Sentiment.NEGATIVE,
+                    "neutral": Sentiment.NEUTRAL,
+                },
+            )
+            prompt_list[f"prompt_{i}"] = prompt
+        return prompt_list
 
     @staticmethod
     def direct_example():
