@@ -847,7 +847,7 @@ class PromptOptimizer:
 
         return generated_prompts
 
-    def run_optimization_loop(self, sample_size=None, n_iterations = 10, new_prompts_per_class=8)-> Dict[str, Tuple[List[str], float]]:
+    def run_optimization_loop(self, sample_size=None, n_iterations = 10, new_prompts_per_class=8, load_basepromts_from="../../data/base_prompts.csv")-> Dict[str, Tuple[List[str], float]]:
 
         # Export base prompts first
         Prompt.export_base_prompts_to_csv()
@@ -860,7 +860,7 @@ class PromptOptimizer:
             y_true = y_true[:sample_size]
 
         # Initialize catalogues with base prompts
-        base_prompts = pd.read_csv("../../data/base_prompts.csv")
+        base_prompts = pd.read_csv(load_basepromts_from)
         base_prompts.to_csv("../../data/prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
         base_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
         print("Initialized catalogues with base prompts")
@@ -892,4 +892,6 @@ if __name__ == "__main__":
     evaluator = PromptEvaluator(config)
     optimizer = PromptOptimizer(evaluator)
 
-    optimizer.run_optimization_loop(sample_size=20, n_iterations=3, new_prompts_per_class=8) #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24
+    optimizer.run_optimization_loop(sample_size=20, n_iterations=3, new_prompts_per_class=8, load_basepromts_from="../../data/current_prompt_catalogue.csv") #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24 #load_basepromts_from: can be used to further iterate on an already optimized catalogue
+
+    #!!! When using different sample sizes the cash file is no longer valid and has to be deleted before running
