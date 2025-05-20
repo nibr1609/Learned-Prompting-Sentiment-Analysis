@@ -623,11 +623,11 @@ class PromptOptimizer:
         for prompt_id in best_prompt_ids:
             print(f"Prompt {prompt_id}: Accuracy = {best_prompts[prompt_id][1]:.4f}")
         
-        # Update current catalogue with best prompts
+        # Update current catalogue with only the best 24 prompts
         updated_current_prompts = current_prompts[current_prompts['idx'].isin(best_prompt_ids)].copy()
         updated_current_prompts = updated_current_prompts.sort_values('accuracy', ascending=False)
         
-        # Save updated current catalogue
+        # Save updated current catalogue with only the best 24 prompts
         updated_current_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
         
         # Add new prompts to full catalogue
@@ -818,6 +818,17 @@ class PromptOptimizer:
                             "",
                         ]
                     )
+                
+                # Also save to current_prompt_catalogue.csv
+                with open("../../data/current_prompt_catalogue.csv", "a") as cpc:
+                    f = csv.writer(cpc)
+                    f.writerow(
+                        [
+                            f"{key}_{unique_id}",
+                            generated_prompts[f"{key}_{i+1}"].replace("\n", "\Line"),
+                            "",
+                        ]
+                    )
         return generated_prompts
 
 
@@ -852,28 +863,8 @@ if __name__ == "__main__":
         print(f"\nCompleted evaluation for iteration {iteration + 1}")
         
         # Generate new prompts based on best ones
-        new_prompts = optimizer.optimize_prompts(results, 5)  # Will add 4k entries: 2k bad and 2k good
+        completions = optimizer.optimize_prompts(results, 5)  # Will add 4k entries: 2k bad and 2k good
         print(f"\nGenerated new prompts for iteration {iteration + 1}")
-        
-        # Convert new prompts to DataFrame format
-        new_prompts_df = pd.DataFrame([
-            {
-                'idx': prompt_id,
-                'prompt': prompt_text,
-                'accuracy': None
-            }
-            for prompt_id, prompt_text in new_prompts.items()
-        ])
-        
-        # Load current prompts
-        current_prompts = pd.read_csv("../../data/current_prompt_catalogue.csv")
-        
-        # Concatenate new prompts with current prompts
-        current_prompts = pd.concat([current_prompts, new_prompts_df], ignore_index=True)
-        
-        # Save updated current prompts
-        current_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
-        print(f"\nAdded {len(new_prompts_df)} new prompts to current catalogue")
         
         print(f"\n=== Completed Optimization Iteration {iteration + 1}/{n_iterations} ===")
 
