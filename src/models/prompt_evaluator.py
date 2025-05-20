@@ -248,36 +248,6 @@ class Prompt:
                 },
             ),
         }
-    
-    @staticmethod
-    def random_example():
-        """
-        Directly asks the model to classify the sentiment of a text.
-        Uses the <PROBE> evaluator to convert logits to probabilities.
-        """
-        return Prompt(
-            template="<start_of_turn>user\nRandomly reply only with one word: positive, negative, or neutral.  \n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-            sentiment_map={
-                "positive": Sentiment.POSITIVE,
-                "negative": Sentiment.NEGATIVE,
-                "neutral": Sentiment.NEUTRAL,
-            },
-        )
-    
-    @staticmethod
-    def load_prompts(prompt_list_str):
-        prompt_list = {}
-        for i, prompt_str in enumerate(prompt_list_str):
-            prompt = Prompt(
-                template=f"<start_of_turn>user\n{prompt_str}\n\n<INPUT><end_of_turn>\n<start_of_turn>model\n<PROBE>",
-                sentiment_map={
-                    "positive": Sentiment.POSITIVE,
-                    "negative": Sentiment.NEGATIVE,
-                    "neutral": Sentiment.NEUTRAL,
-                },
-            )
-            prompt_list[f"prompt_{i}"] = prompt
-        return prompt_list
 
     @staticmethod
     def direct_example():
@@ -336,6 +306,31 @@ class Prompt:
                 "💩": Sentiment.NEGATIVE,
             },
         )
+
+    @staticmethod
+    def export_base_prompts_to_csv():
+        """Export the base prompts to base_prompts.csv format"""
+        prompts = Prompt.prompt_catalogue()
+        
+        # Create DataFrame with required columns
+        df = pd.DataFrame(columns=['idx', 'prompt', 'accuracy'])
+        
+        # Convert each prompt to the required format
+        for idx, prompt in prompts.items():
+            # Format the prompt string to match the CSV format
+            prompt_str = f"<start_of_turn>user\n{prompt.template}<end_of_turn>\n<start_of_turn>model\n<PROBE>"
+            # Replace all newlines with \Line
+            prompt_str = prompt_str.replace("\n", "\Line")
+            # Add row to DataFrame
+            df = pd.concat([df, pd.DataFrame({
+                'idx': [idx],
+                'prompt': [prompt_str],
+                'accuracy': [None]  # Accuracy will be calculated during evaluation
+            })], ignore_index=True)
+        
+        # Save to CSV
+        df.to_csv("../../data/base_prompts.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+        print(f"Exported {len(df)} base prompts to base_prompts.csv")
 
 
 class PromptEvaluator:
@@ -554,67 +549,92 @@ class PromptOptimizer:
     def evaluate_prompts(
         self, X: List[str], y_true: List[str]
     ) -> Dict[str, Tuple[List[str], float]]:
-        # Runs the model on X using the given prompt, and compares predictions to y_true
+        # Load both catalogues
+        current_prompts = pd.read_csv("../../data/current_prompt_catalogue.csv")
+        all_prompts = pd.read_csv("../../data/prompt_catalogue.csv")
+        
+        # Find new prompts that aren't in current catalogue
+        new_prompts = all_prompts[~all_prompts['idx'].isin(current_prompts['idx'])]
+        if not new_prompts.empty:
+            print(f"\nFound {len(new_prompts)} new prompts to add to current catalogue")
+            # Add new prompts to current catalogue
+            current_prompts = pd.concat([current_prompts, new_prompts], ignore_index=True)
+            # Save updated current catalogue
+            current_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+        
+        # Evaluate all prompts in current catalogue
         results = {}
-        prompts = pd.read_csv("../../data/prompt_catalogue.csv")
-        for idx, row in prompts.iterrows():
+        for idx, row in current_prompts.iterrows():
             print(f"\n--- Evaluating with prompt: {row['idx']} ---")
-            # creating prompts out of the string prompts
-            prompt = Prompt(
-                template=row["prompt"]
-                .replace("Prompt(template='", "")
-                .replace(
-                    "sentiment_map={'positive': <Sentiment.POSITIVE: 0>, 'negative': <Sentiment.NEGATIVE: 2>, 'neutral': <Sentiment.NEUTRAL: 1>}), \"",
-                    "",
-                ),
-                sentiment_map={
-                    "positive": Sentiment.POSITIVE,
-                    "negative": Sentiment.NEGATIVE,
-                    "neutral": Sentiment.NEUTRAL,
-                },
-            )
-            # Run model
-            y_proba = evaluator.predict_proba(prompt, X)
-
-            with pd.option_context("display.float_format", "{:0.4f}".format):
-                print(
-                    "--------------------------------------------------------\n",
-                    y_proba,
-                    "\n--------------------------------------------------------",
+            
+            # Check if we already have evaluation results for this prompt
+            if 'predictions' in row and 'accuracy' in row and not pd.isna(row['predictions']) and not pd.isna(row['accuracy']):
+                print("Using cached evaluation results")
+                y_pred = eval(row['predictions'])  # Convert string representation back to list
+                accuracy = float(row['accuracy'])
+            else:
+                # creating prompts out of the string prompts
+                prompt = Prompt(
+                    template=row["prompt"]
+                    .replace("Prompt(template='", "")
+                    .replace(
+                        "sentiment_map={'positive': <Sentiment.POSITIVE: 0>, 'negative': <Sentiment.NEGATIVE: 2>, 'neutral': <Sentiment.NEUTRAL: 1>}), \"",
+                        "",
+                    ),
+                    sentiment_map={
+                        "positive": Sentiment.POSITIVE,
+                        "negative": Sentiment.NEGATIVE,
+                        "neutral": Sentiment.NEUTRAL,
+                    },
                 )
+                # Run model
+                y_proba = evaluator.predict_proba(prompt, X)
 
-            # Get predicted labels
-            y_pred = y_proba.idxmax(axis=1).tolist()
+                with pd.option_context("display.float_format", "{:0.4f}".format):
+                    print(
+                        "--------------------------------------------------------\n",
+                        y_proba,
+                        "\n--------------------------------------------------------",
+                    )
 
-            # Compute accuracy
-            accuracy = accuracy_score(
-                [label.lower() for label in y_true], [pred.lower() for pred in y_pred]
-            )
-            results[idx] = (y_pred, accuracy)
-            prompts.loc[idx, "accuracy"] = accuracy
+                # Get predicted labels
+                y_pred = y_proba.idxmax(axis=1).tolist()
 
+                # Compute accuracy
+                accuracy = accuracy_score(
+                    [label.lower() for label in y_true], [pred.lower() for pred in y_pred]
+                )
+                
+                # Save evaluation results
+                current_prompts.loc[idx, 'predictions'] = str(y_pred)  # Convert list to string for storage
+                current_prompts.loc[idx, 'accuracy'] = accuracy
+                all_prompts.loc[all_prompts['idx'] == row['idx'], 'predictions'] = str(y_pred)
+                all_prompts.loc[all_prompts['idx'] == row['idx'], 'accuracy'] = accuracy
+
+            results[row['idx']] = (y_pred, accuracy)
             print(f"Accuracy: {accuracy:.2f}")
-            #print(f"Predictions: {y_pred}")
-            #print(f"True labels: {y_true}")
-
-        # Save all predictions to the DataFrame
-        prompts.to_csv(
-            "../../data/prompt_catalogue.csv",
-            index=False,
-            quoting=csv.QUOTE_NONNUMERIC,
-            escapechar="\n",
-        )
 
         # Use greedy selection to find best combination of 24 prompts
-        best_prompts = self.greedy_select_prompts(results, X, y_true, k=4)
+        best_prompts = self.greedy_select_prompts(results, X, y_true, k=24)
         
-        # Print detailed information about selected prompts
-        print("\nSelected prompts and their individual accuracies:")
-        for prompt_id, (predictions, accuracy) in best_prompts.items():
-            print(f"Prompt {prompt_id}:")
-            print(f"  Accuracy: {accuracy:.4f}")
-            print(f"  Predictions: {predictions}")
-            print(f"  True labels: {y_true}")
+        # Update current catalogue with best 24 prompts
+        best_prompt_ids = list(best_prompts.keys())
+        print(f"\nSelected best {len(best_prompt_ids)} prompts:")
+        for prompt_id in best_prompt_ids:
+            print(f"Prompt {prompt_id}: Accuracy = {best_prompts[prompt_id][1]:.4f}")
+        
+        # Update current catalogue with best prompts
+        updated_current_prompts = current_prompts[current_prompts['idx'].isin(best_prompt_ids)].copy()
+        updated_current_prompts = updated_current_prompts.sort_values('accuracy', ascending=False)
+        
+        # Save updated current catalogue
+        updated_current_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+        
+        # Add new prompts to full catalogue
+        new_prompts_to_add = current_prompts[~current_prompts['idx'].isin(all_prompts['idx'])]
+        if not new_prompts_to_add.empty:
+            all_prompts = pd.concat([all_prompts, new_prompts_to_add], ignore_index=True)
+            all_prompts.to_csv("../../data/prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
         
         return best_prompts
 
@@ -682,35 +702,47 @@ class PromptOptimizer:
             return accuracy, best_prompt_per_sample
         
         # Main greedy selection loop
-        for j in range(k):
+        available_prompts = set(results.keys())
+        for j in range(min(k, len(available_prompts))):
             best_improvement = -float('inf')
             best_prompt = None
             best_prompt_per_sample = None
             
             # Try each remaining prompt
-            for prompt_id in results:
-                if prompt_id not in S:
-                    # Calculate improvement when adding this prompt
-                    current_score, _ = evaluate_set(S)
-                    new_score, new_best_prompts = evaluate_set(S | {prompt_id})
-                    improvement = new_score - current_score
-                    
-                    if improvement > best_improvement:
-                        best_improvement = improvement
+            for prompt_id in available_prompts - S:
+                # Calculate improvement when adding this prompt
+                current_score, _ = evaluate_set(S)
+                new_score, new_best_prompts = evaluate_set(S | {prompt_id})
+                improvement = new_score - current_score
+                
+                if improvement > best_improvement:
+                    best_improvement = improvement
+                    best_prompt = prompt_id
+                    best_prompt_per_sample = new_best_prompts
+            
+            # If no prompt improves the score but we still need more prompts,
+            # select the one with highest individual accuracy
+            if best_prompt is None and len(S) < k:
+                best_accuracy = -float('inf')
+                for prompt_id in available_prompts - S:
+                    _, accuracy = results[prompt_id]
+                    if accuracy > best_accuracy:
+                        best_accuracy = accuracy
                         best_prompt = prompt_id
-                        best_prompt_per_sample = new_best_prompts
+                        best_prompt_per_sample = None  # We'll calculate this if needed
             
             # Add best prompt to set
             if best_prompt is not None:
                 S.add(best_prompt)
                 selected_results[best_prompt] = results[best_prompt]
                 print(f"\nSelected prompt {best_prompt} with improvement {best_improvement:.4f}")
-                print("Best prompt per sample distribution:")
-                prompt_counts = {}
-                for prompt in best_prompt_per_sample:
-                    prompt_counts[prompt] = prompt_counts.get(prompt, 0) + 1
-                for prompt, count in prompt_counts.items():
-                    print(f"  Prompt {prompt}: {count} samples")
+                if best_prompt_per_sample:
+                    print("Best prompt per sample distribution:")
+                    prompt_counts = {}
+                    for prompt in best_prompt_per_sample:
+                        prompt_counts[prompt] = prompt_counts.get(prompt, 0) + 1
+                    for prompt, count in prompt_counts.items():
+                        print(f"  Prompt {prompt}: {count} samples")
         
         # Print final evaluation
         final_score, final_best_prompts = evaluate_set(S)
@@ -793,28 +825,58 @@ if __name__ == "__main__":
     config = PromptEvaluatorConfig.for_gemma_3_4b_it(verbose=True, debug=True)
     evaluator = PromptEvaluator(config)
     optimizer = PromptOptimizer(evaluator)
-    prompts = Prompt.prompt_catalogue()
-    # True labels, needed to determine ratings of the prompts
-    # prompts.pop("emoji_example", None)
+
+    # Export base prompts first
+    Prompt.export_base_prompts_to_csv()
 
     df = pd.read_csv("../../data/training.csv")
     X = df["sentence"].tolist()
     y_true = [label.upper() for label in df["label"]]
-    sample_size = 10
+    sample_size = 5
     X = X[:sample_size]
     y_true = y_true[:sample_size]
-    # prompts = pd.from_csv("")
 
-    X_ = [
-        "I called Moveaholics Jason was amazing he even offered to come out that night.",
-        "I called Moveaholics Jason was truly spectacular, but he offered to come out that night.",
-        "I called Moveaholics Jason was medium he even offered to come out that night.",
-        "I called Moveaholics Jason was shit he even offered to come out that night.",
-    ]
-    y_true_ = ["positive", "positive", "neutral", "negative"]
-    results = optimizer.evaluate_prompts(X, y_true)
-    #print(results)
-    completions = optimizer.optimize_prompts(results, 10)
-    print(completions)
-    #new_prompts = optimizer.format_prompts(completions)
-    #print(new_prompts)
+    # Initialize catalogues with base prompts
+    base_prompts = pd.read_csv("../../data/base_prompts.csv")
+    base_prompts.to_csv("../../data/prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+    base_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+    print("Initialized catalogues with base prompts")
+
+    # Optimization loop
+    n_iterations = 2  # Number of optimization iterations
+    for iteration in range(n_iterations):
+        print(f"\n=== Starting Optimization Iteration {iteration + 1}/{n_iterations} ===")
+        
+        # Evaluate current prompts and get best ones
+        results = optimizer.evaluate_prompts(X, y_true)
+        print(f"\nCompleted evaluation for iteration {iteration + 1}")
+        
+        # Generate new prompts based on best ones
+        new_prompts = optimizer.optimize_prompts(results, 5)  # Will add 4k entries: 2k bad and 2k good
+        print(f"\nGenerated new prompts for iteration {iteration + 1}")
+        
+        # Convert new prompts to DataFrame format
+        new_prompts_df = pd.DataFrame([
+            {
+                'idx': prompt_id,
+                'prompt': prompt_text,
+                'accuracy': None
+            }
+            for prompt_id, prompt_text in new_prompts.items()
+        ])
+        
+        # Load current prompts
+        current_prompts = pd.read_csv("../../data/current_prompt_catalogue.csv")
+        
+        # Concatenate new prompts with current prompts
+        current_prompts = pd.concat([current_prompts, new_prompts_df], ignore_index=True)
+        
+        # Save updated current prompts
+        current_prompts.to_csv("../../data/current_prompt_catalogue.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
+        print(f"\nAdded {len(new_prompts_df)} new prompts to current catalogue")
+        
+        print(f"\n=== Completed Optimization Iteration {iteration + 1}/{n_iterations} ===")
+
+    print("\nOptimization complete!")
+    print("Final best prompts are in current_prompt_catalogue.csv")
+    print("All generated prompts are in prompt_catalogue.csv")
