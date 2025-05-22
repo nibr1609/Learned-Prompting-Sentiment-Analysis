@@ -847,12 +847,14 @@ class PromptOptimizer:
 
         return generated_prompts
 
-    def run_optimization_loop(self, sample_size=None, n_iterations = 10, new_prompts_per_class=8, load_basepromts_from="../../data/base_prompts.csv")-> Dict[str, Tuple[List[str], float]]:
+    def run_optimization_loop(self, shuffle=False, sample_size=None, n_iterations = 10, new_prompts_per_class=8, load_basepromts_from="../../data/base_prompts.csv")-> Dict[str, Tuple[List[str], float]]:
 
         # Export base prompts first
         Prompt.export_base_prompts_to_csv()
 
         df = pd.read_csv("../../data/training.csv")
+        if shuffle:
+            df = df.sample(frac=1, random_state=42)
         X = df["sentence"].tolist()
         y_true = [label.upper() for label in df["label"]]
         if sample_size:
@@ -867,6 +869,7 @@ class PromptOptimizer:
 
         # Optimization loop
         results = optimizer.evaluate_prompts(X, y_true)
+
         for iteration in range(n_iterations):
             print(f"\n=== Starting Optimization Iteration {iteration + 1}/{n_iterations} ===")
 
@@ -876,6 +879,8 @@ class PromptOptimizer:
             
             # Evaluate current prompts and get best ones
             results = optimizer.evaluate_prompts(X, y_true)
+            df = pd.read_csv("../../data/current_prompt_catalogue.csv")
+            df.to_csv(f"../../data/catalogue_iter{iteration}.csv", index=False, quoting=csv.QUOTE_NONNUMERIC, escapechar="\n")
             print(f"\nCompleted evaluation for iteration {iteration + 1}")
             
             print(f"\n=== Completed Optimization Iteration {iteration + 1}/{n_iterations} ===")
@@ -892,6 +897,6 @@ if __name__ == "__main__":
     evaluator = PromptEvaluator(config)
     optimizer = PromptOptimizer(evaluator)
 
-    optimizer.run_optimization_loop(sample_size=20, n_iterations=3, new_prompts_per_class=8, load_basepromts_from="../../data/current_prompt_catalogue.csv") #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24 #load_basepromts_from: can be used to further iterate on an already optimized catalogue
+    optimizer.run_optimization_loop(sample_size=10, shuffle=False, n_iterations=3, new_prompts_per_class=2, load_basepromts_from="../../data/current_prompt_catalogue.csv") #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24 #load_basepromts_from: can be used to further iterate on an already optimized catalogue #Shuffle the selected data for iterations !!Attention due to cashing each promt that was calculated once will always have the score from the shuffled set it was initially tested on (can be dangerous --> thus disabled by default)
 
     #!!! When using different sample sizes the cash file is no longer valid and has to be deleted before running
