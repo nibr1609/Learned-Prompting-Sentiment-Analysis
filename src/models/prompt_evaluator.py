@@ -656,7 +656,7 @@ class PromptOptimizer:
 
         # Sort prompts by accuracy descending
         sorted_results = dict(sorted(results.items(), key=lambda item: item[1][1], reverse=True))
-        best_prompts = self.greedy_select_prompts(sorted_results, X, y_true, k=24)
+        best_prompts = self.greedy_select_prompts(sorted_results, X, y_true, k=10)
         
         # Print detailed information about selected prompts
         print("\nSelected prompts and their individual accuracies:")
@@ -805,7 +805,6 @@ class PromptOptimizer:
         # nimmt die sortierten Resultate, gibt die ersten und letzten k an das completion modell
         base_prompt_good = "<start_of_turn>user\nHere are some really good prompts:"
         base_prompt_bad = "<start_of_turn>user\nHere are some prompts that don't work well:"
-        count_base_prompt = "<start_of_turn>user\nHere is an example of a prompt I would give an expert to generate a sentiment mapping from a sentence to emojis: I would like to use a subset of the following emojis to summarize my sentiment: 🥰, 😘, 🤗, 😎, 👍, 🧐, ✍, 👀, 🤐, 😶, 🙄, 😪, 😢, 😡, 💩\nThis is a sentence without emojis where I express my sentiment<INPUT>. I want you to produce 15 similar prompts, that also use these emojis to summarize the emotions found in the text. Make the prompt very long and precise. You can include examples, such as : for this negative word, use this emoji. Make the prompts, such that each prompt works well for certain types of reviews. Not all prompts have to classify all reviews well. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
 
         prompts = pd.read_csv('../../data/current_prompt_catalogue.csv')
         
@@ -826,11 +825,10 @@ class PromptOptimizer:
         
         base_prompt_good += f"Based on these, suggest exactly 1 new prompt templates in a similar style. The goal is to always generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Always include in your prompt that the output should be negative, positive or neutral, nothing more. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. For example this sentence: 'I highly recommend any location but his.' should be classified as negative. This sentence:'They are just as good at 'soft skills' as translating.' should be classified as positive. Only output the new prompts in the following format: Prompt: <Prompt>. At the end of the prompt there should be this: \n\n<INPUT>\n<end_of_turn>\n<start_of_turn>model\n"
         base_prompt_bad += f"Based on these, suggest exactly 1 improved prompt templates, that could work better. The goal is to always be to generate the sentiment of a review as either postive, negative, or neutral. You will want to generate long prompts, that are very specific. Always include in your prompt that the output should be negative, positive or neutral, nothing more. Do not put brakets in your output. Your prompt should not work on all inputs, but very well on a certain type of inputs. So try to produce expert prompts for certain reviews. For example this sentence: 'I highly recommend any location but his.' should be classified as negative. This sentence: They are just as good at 'soft skills' as translating.' should be classified as positive. Only output the new prompts in the following format: Prompt: <Prompt>.  Followed by this literal string: '\n\n<INPUT>\n\n'<end_of_turn>\n<start_of_turn>model\n"
-        count_base_prompt += f"Based on these, suggest exactly 1 improved prompt templates, that could work better."
 
         completions = {}
 
-        for label, prompt_text in [("good", base_prompt_good), ("bad", base_prompt_bad), ("count", count_base_prompt)]:
+        for label, prompt_text in [("good", base_prompt_good), ("bad", base_prompt_bad)]:
             for i in range(k): 
                 res = self.evaluator.llm.create_completion(
                     prompt=prompt_text, max_tokens=170, temperature=0.9, stop=[]
@@ -879,9 +877,6 @@ class PromptOptimizer:
 
     def run_optimization_loop(self, shuffle=False, sample_size=None, n_iterations = 10, new_prompts_per_class=8, load_basepromts_from="../../data/base_prompts.csv")-> Dict[str, Tuple[List[str], float]]:
 
-        # Export base prompts first
-        Prompt.export_base_prompts_to_csv()
-
         df = pd.read_csv("../../data/training.csv")
         if shuffle:
             df = df.sample(frac=1, random_state=42)
@@ -927,6 +922,10 @@ if __name__ == "__main__":
     evaluator = PromptEvaluator(config)
     optimizer = PromptOptimizer(evaluator)
 
-    optimizer.run_optimization_loop(sample_size=10, shuffle=False, n_iterations=3, new_prompts_per_class=2, load_basepromts_from="../../data/current_prompt_catalogue.csv") #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24 #load_basepromts_from: can be used to further iterate on an already optimized catalogue #Shuffle the selected data for iterations !!Attention due to cashing each promt that was calculated once will always have the score from the shuffled set it was initially tested on (can be dangerous --> thus disabled by default)
+
+    results = optimizer.run_optimization_loop(sample_size=5, shuffle=True, n_iterations=4, new_prompts_per_class=1) 
+    
+    #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24 #load_basepromts_from: can be used to further iterate on an already optimized catalogue #Shuffle the selected data for iterations !!Attention due to cashing each promt that was calculated once will always have the score from the shuffled set it was initially tested on (can be dangerous --> thus disabled by default)
+
 
     #!!! When using different sample sizes the cash file is no longer valid and has to be deleted before running
