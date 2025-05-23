@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --chdir .
 #SBATCH --account=cil_jobs
-#SBATCH --time=01:00:00
+#SBATCH --time=03:00:00
 #SBATCH --job-name=prompt#####
-#SBATCH -o=/home/%u/logs/prompt_output__%x-%j.out
-#SBATCH -e=/home/%u/logs/prompt_error__%x-%j.err
+#SBATCH -o /home/%u/logs/prompt_output__%x-%j.out
+#SBATCH -e /home/%u/logs/prompt_error__%x-%j.err
 #SBATCH --mail-type=FAIL
 
 set -e

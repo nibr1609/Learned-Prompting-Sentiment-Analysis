@@ -923,7 +923,7 @@ if __name__ == "__main__":
     optimizer = PromptOptimizer(evaluator)
 
 
-    results = optimizer.run_optimization_loop(sample_size=5, shuffle=True, n_iterations=4, new_prompts_per_class=1) 
+    results = optimizer.run_optimization_loop(sample_size=5000, shuffle=True, n_iterations=5, new_prompts_per_class=10) 
     
     #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24 #load_basepromts_from: can be used to further iterate on an already optimized catalogue #Shuffle the selected data for iterations !!Attention due to cashing each promt that was calculated once will always have the score from the shuffled set it was initially tested on (can be dangerous --> thus disabled by default)
 
