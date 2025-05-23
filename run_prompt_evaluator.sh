@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --chdir .
 #SBATCH --account=cil_jobs
-#SBATCH --time=03:00:00
+#SBATCH --time=24:00:00
 #SBATCH --job-name=prompt#####
 #SBATCH -o /home/%u/logs/prompt_output__%x-%j.out
 #SBATCH -e /home/%u/logs/prompt_error__%x-%j.err
