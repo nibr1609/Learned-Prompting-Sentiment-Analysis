@@ -878,8 +878,14 @@ class PromptOptimizer:
     def run_optimization_loop(self, shuffle=False, sample_size=None, n_iterations = 10, new_prompts_per_class=8, load_basepromts_from="../../data/base_prompts.csv")-> Dict[str, Tuple[List[str], float]]:
 
         df = pd.read_csv("../../data/training.csv")
+        cached_path = "../../data/training_shuffled_cache.csv"
         if shuffle:
-            df = df.sample(frac=1, random_state=42)
+            import os
+            if os.path.exists(cached_path):
+                df = pd.read_csv(cached_path)
+            else:
+                df = df.sample(frac=1, random_state=42)
+                df.to_csv(cached_path, index=False)
         X = df["sentence"].tolist()
         y_true = [label.upper() for label in df["label"]]
         if sample_size:
@@ -923,7 +929,7 @@ if __name__ == "__main__":
     optimizer = PromptOptimizer(evaluator)
 
 
-    results = optimizer.run_optimization_loop(sample_size=5000, shuffle=True, n_iterations=5, new_prompts_per_class=10) 
+    results = optimizer.run_optimization_loop(sample_size=1000, shuffle=True, n_iterations=5, new_prompts_per_class=5) 
     
     #Sample size: the number of sampes forom X that we evaluate against for final run let out or set None #N_iterations: optimization iterations #new_prompts_per_class in total we get 3*this new entries, for bad,good,count so 8 is reccomended to get 24 #load_basepromts_from: can be used to further iterate on an already optimized catalogue #Shuffle the selected data for iterations !!Attention due to cashing each promt that was calculated once will always have the score from the shuffled set it was initially tested on (can be dangerous --> thus disabled by default)
 
