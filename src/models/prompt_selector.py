@@ -10,8 +10,9 @@ from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import numpy  as np
 import datetime
+from models.prompt_catalogue import Prompt, PromptCatalogue
 
-def get_labels(data, prompt_catalogue: Dict[str, "Prompt"], evaluator):
+def get_labels(data, prompt_catalogue: PromptCatalogue, evaluator):
     # Dummy
     cached = False
     if (cached):
@@ -21,7 +22,7 @@ def get_labels(data, prompt_catalogue: Dict[str, "Prompt"], evaluator):
 
     predictions_list = []
     print(prompt_catalogue)
-    for name, prompt in prompt_catalogue.items():
+    for name, prompt in prompt_catalogue.get_prompts():
         prediction = np.array(evaluator.predict_proba(prompt, sentences))
         predictions_list.append(prediction)
 
@@ -51,14 +52,13 @@ def get_labels(data, prompt_catalogue: Dict[str, "Prompt"], evaluator):
 
     np.save(f"labels_{timestamp}.npy", softmax_output)
 
-    return softmax_output, preds, np.array(list(data["label"]))
+    return softmax_output
 
 class SentenceToPromptDataset(Dataset):
-    def __init__(self, config: Config, prompt_catalogue: Dict[str, "Prompt"], evaluator, data):
+    def __init__(self, config: Config, prompt_catalogue: PromptCatalogue, evaluator, data):
         self.config = config
         self.data = data
-
-        self.labels, preds, true_labels = get_labels(self.data, prompt_catalogue, evaluator)
+        self.labels = get_labels(self.data, prompt_catalogue, evaluator)
 
     def __len__(self):
         return len(self.data)
@@ -70,7 +70,7 @@ class SentenceToPromptModule(pl.LightningDataModule):
     def __init__(
         self,
         config:Config,
-        prompt_catalogue: Dict[str, "Prompt"],
+        prompt_catalogue: PromptCatalogue,
         evaluator,
         train,
         val,
@@ -111,10 +111,10 @@ class SentenceToPromptModule(pl.LightningDataModule):
         )
 
 class PromptSelector(pl.LightningModule):
-    def __init__(self, config: Config, prompt_catalogue: Dict[str, "Prompt"], *args, **kwargs):
+    def __init__(self, config: Config, prompt_catalogue: PromptCatalogue, *args, **kwargs):
         super(PromptSelector, self).__init__(*args, **kwargs)
 
-        self.output_layers = len(prompt_catalogue)
+        self.output_layers = len(prompt_catalogue.get_prompts())
 
         print("number_hidden_layers")
         print(self.output_layers)
@@ -134,11 +134,7 @@ class PromptSelector(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y_true = batch
-        print("step")
-        print(x)
-        print(type(x))
         logits = self(x)
-        print(logits)
         loss = F.cross_entropy(logits, y_true)
 
         # Calculate accuracy

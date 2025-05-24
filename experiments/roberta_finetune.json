@@ -5,7 +5,7 @@
         "model_type": "HuggingFaceModel",
         "learning_rate": 1e-5,
         "batch_size": 16,
-        "num_epochs": 10,
+        "num_epochs": 3,
         "weight_decay": 0.01
     },
     "experiment": {

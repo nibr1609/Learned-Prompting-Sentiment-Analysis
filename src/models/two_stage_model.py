@@ -10,6 +10,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer
 from torch.utils.data import Dataset, DataLoader
 import torch
+from models.prompt_catalogue import PromptCatalogue, Prompt
+from models.prompt_optimizer import PromptOptimizer
+from utils.metrics import evaluate
 
 class TestDataset(Dataset):
     def __init__(self, sentences):
@@ -66,6 +69,28 @@ class TwoStageModel(BaseSentimentModel):
 
             model, trainer = self.train_prompt_selector(train, val)
             print("finished training")
+
+        elif self.config.experiment.two_stage_setting == "only_optimize":
+            self.prompt_catalogue = self.load_prompt_catalogue()
+            optimizer = PromptOptimizer(self.evaluator, self.config)
+
+            # Restrict training size, we don't need as many for optimizer
+            train_rest = train.iloc[:self.config.experiment.max_train_samples_prompt_optimizer]
+
+            self.prompt_catalogue = optimizer.run_optimization_loop(prompt_catalogue=self.prompt_catalogue, train=train_rest, val=val, iterations=self.config.prompt.optimizer_iterations)
+        elif self.config.experiment.two_stage_setting == "optimize_and_select":
+            self.prompt_catalogue = self.load_prompt_catalogue()
+            optimizer = PromptOptimizer(self.evaluator, self.config)
+
+            # Restrict training size, we don't need as many for optimizer
+            train_rest = train.iloc[:self.config.experiment.max_train_samples_prompt_optimizer]
+
+            self.prompt_catalogue = optimizer.run_optimization_loop(prompt_catalogue=self.prompt_catalogue, train=train_rest, val=val, iterations=self.config.prompt.optimizer_iterations)
+
+            model, trainer = self.train_prompt_selector(train, val)
+            self.selector_model = model
+            self.selector_trainer = trainer
+
         else:
             raise NotImplementedError("Training not defined for inference model")
     
@@ -76,7 +101,7 @@ class TwoStageModel(BaseSentimentModel):
             prompt = Prompt.direct_example()
             return self.predict_single_prompt(prompt, test, val)
 
-        elif self.config.experiment.two_stage_setting == "selection":
+        elif self.config.experiment.two_stage_setting == "selection" or self.config.experiment.two_stage_setting == "optimize_and_select":
             assert self.selector_model is not None, "Prompt Selector has to be trained first"
             if val is not None:
                 prompts_val = self.predict_sentences(list(val["sentence"]))
@@ -84,11 +109,6 @@ class TwoStageModel(BaseSentimentModel):
             prompts_test = self.predict_sentences(list(test["sentence"]))
             prompts_test = torch.cat(prompts_test, dim=0)
 
-
-
-            print(prompts_val)
-            print("##")
-            print(prompts_test)
             if self.config.experiment.selector_eval_setting == "single":
                 prediction_val = None
                 if val is not None:
@@ -98,12 +118,18 @@ class TwoStageModel(BaseSentimentModel):
 
 
                 return prediction_test, prediction_val if val is not None else None
-
+            
+        elif self.config.experiment.two_stage_setting == "only_optimize":
+            # get best single prompt
+            prompt = self.prompt_catalogue.get_prompts()[0][1]
+            print("top prompt")
+            print(prompt)
+            return self.predict_single_prompt(prompt, test, val)
     
 
     def evaluate(self, pred, val_data):
         true_labels = val_data["label"]
-        metrics = super().evaluate(pred, true_labels)
+        metrics = evaluate(pred, true_labels)
         print(metrics)
         return metrics
     
@@ -125,7 +151,7 @@ class TwoStageModel(BaseSentimentModel):
         predictions = []
         for i, prompt_idx in enumerate(prompts): # TODO maybe it's faster to group by prompt and then predict sentence batches per promp
             print(f"predicting {i}/{len(prompts)}")
-            prompt = list(self.prompt_catalogue.values())[prompt_idx.item()]
+            prompt = self.prompt_catalogue.get_prompt_at_pos(prompt_idx.item())
             pred = self.evaluator.predict(prompt, [data.iloc[i]["sentence"]])
             predictions.append(pred[0])
 
@@ -150,7 +176,7 @@ class TwoStageModel(BaseSentimentModel):
         return prediction_test, prediction_val if val is not None else None
 
     def load_prompt_catalogue(self):
-        return Prompt.load_prompts(self.config.prompt.prompt_list)
+        return PromptCatalogue(self.config.prompt.prompt_list)
     
     def train_prompt_selector(self, train, val):
         assert self.prompt_catalogue is not None, "Prompt catalogue must be set before training Prompt Selector"

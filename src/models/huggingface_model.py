@@ -15,6 +15,7 @@ import pandas as pd
 from math import ceil
 from transformers import DataCollatorWithPadding
 from transformers import DebertaV2Tokenizer
+from utils.metrics import evaluate
 
 class BERTHuggingFaceModel(BaseSentimentModel):
     def __init__(self, config: Config):
@@ -207,7 +208,7 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         true_labels = true_data["labels"]
         true_labels = np.array([ {0:"negative",1:"neutral",2:"positive", None:None}[lab]
                                 for lab in np.array(true_labels) ])
-        metrics = super().evaluate(pred, true_labels)
+        metrics = evaluate(pred, true_labels)
         print(metrics)
         return metrics
     

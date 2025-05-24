@@ -37,6 +37,7 @@ class ExperimentConfig:
     log_interval: int = 100
     max_test_samples: Optional[int] = None
     max_train_samples: Optional[int] = None
+    max_train_samples_prompt_optimizer: Optional[int] = None
     validation_set_split: Optional[float] = 0.2
     save_per_epoch: int = 4
     two_stage_setting: Optional[str] = ""
@@ -56,6 +57,8 @@ class DataConfig:
 @dataclass
 class PromptConfig:
     prompt_list: List[str] = None
+    k_best_worst: Optional[int] = 3
+    optimizer_iterations: int = 3
 
 @dataclass
 class Config:
@@ -83,11 +86,25 @@ def get_default_configs() -> Config:
         train_path=data_path / "training.csv",
         test_path=data_path / "test.csv",
         submission_dir=base_path / "submissions",
-        experiment_output_dir=base_path / "experiments",
-        model_output_dir="/work/scratch/nbritz/models"
+        experiment_output_dir=base_path / "results/experiments",
+        model_output_dir="/work/scratch/nbritz/models",
     )
 
-    prompt_config = PromptConfig()
+    prompt_config = PromptConfig(
+        [
+            "You are a highly skilled sentiment analysis expert specializing in analyzing online customer reviews for e-commerce businesses. Categorize it as definitively either positive, negative, or neutral. ",
+            "You are a highly experienced sentiment analysis expert specializing in analyzing online reviews of restaurants. Provide a concise sentiment classification – “positive”, “negative”, or “neutral”. Do not include any explanations or justifications; simply state the sentiment. ",
+            "Sentiment classification task. There can be some sarcasam pay attention to this. Choose one of the following: positive, negative, or neutral.",
+            "You are a professional brand monitor tasked with assessing customer feedback. Your role is to categorize the sentiment of each review as either positive, negative, or neutral. Your response MUST be limited to a single word: positive, negative, or neutral. Prioritize accuracy above all else.",
+            "Sentiment classification task. Dont let yourself be influenced by single words too much. Analyze the sentence as a whole. Choose carefully one of the following: positive, negative, or neutral.",
+            "You are a highly experienced sentiment analysis expert specializing in analyzing whether people find prices appropriate. Provide a concise sentiment classification – “positive”, “negative”, or “neutral”. Do not include any explanations or justifications; simply state the sentiment. ",
+            "Do a sentiment classification task. Specialize on people's emotion such as anger or joy. Provide a concise sentiment classification – “positive”, “negative”, or “neutral”. Do not include any explanations or justifications; simply state the sentiment. ",
+            "You are a highly skilled sentiment analysis expert. You will receive reviews about movies. Answer with one word: 'positive', 'negative', or 'neutral'. ",
+            "You are a highly skilled sentiment analysis expert. Focus on double negations in sentences. Answer with one word: 'positive', 'negative', or 'neutral'. ",
+            "You are a highly skilled sentiment analysis expert. Your task is to read sentences and determine the sentiment expressed. The sentiment should be classified as either 'positive', 'negative', or 'neutral'. Provide only the single word sentiment classification."
+        ],
+        k_best_worst=3
+    )
 
     return Config(
         model=model_config,
