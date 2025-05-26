@@ -32,6 +32,15 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             print("No GPU available, using CPU.")
     
     def preprocess_dataset(self, config: Config):
+        """
+        Load, optionally subsample, split, tokenize, and format datasets for training, validation, and testing. Specific to this Model
+
+        Args:
+            config (Config): Configuration object with data and experiment parameters.
+
+        Returns:
+            tuple: (train_dataset, val_dataset or None, test_dataset, validation_exists flag)
+        """
         # 1) load
         ds = load_dataset("csv", data_files={
             "train": str(config.data.train_path),
@@ -85,7 +94,7 @@ class BERTHuggingFaceModel(BaseSentimentModel):
             type="torch",
             columns=["input_ids", "attention_mask", "labels"]
         )
-        # if you have a validation split
+        # if there is a validation split
         if "val" in ds:
             ds["val"].set_format(
                 type="torch",
@@ -100,6 +109,13 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         return ds["train"], ds["val"] if validation_exists else None, ds["test"], validation_exists
 
     def train(self, train_ds, val_ds=None):
+        """
+        Train the model on the given training dataset, optionally using a validation dataset.
+
+        Args:
+            train_ds (Dataset): Training dataset.
+            val_ds (Dataset, optional): Validation dataset. Defaults to None.
+        """
         model_root_directory = self.config.data.model_output_dir / (self.config.experiment.experiment_name + "_" + self.config.experiment.experiment_id)
 
         model_root_directory.mkdir(parents=True, exist_ok=True)
@@ -109,12 +125,9 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer,
             pad_to_multiple_of=8)
 
-        # save save_per_epoch times per epoch
         steps_per_epoch = ceil(len(train_ds) / self.config.model.batch_size)
         eval_save_steps = max(1, steps_per_epoch // self.config.experiment.save_per_epoch)
 
-        # save memory:
-        #self.model.gradient_checkpointing_enable()
 
         args = TrainingArguments(
             output_dir=model_root_directory / "output",
@@ -165,6 +178,16 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         self.trainer.train()
 
     def predict_logits(self, test_ds, val_ds):
+        """
+        Predict logits for test and optionally validation datasets.
+
+        Args:
+            test_ds (Dataset): Test dataset.
+            val_ds (Dataset or None): Validation dataset or None.
+
+        Returns:
+            tuple: (test_logits, val_logits) - NumPy arrays of logits.
+        """
         # if nobody trained, still create a Trainer for inference
         if not hasattr(self, "trainer"):
             args = TrainingArguments(
@@ -189,6 +212,16 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         return test_logits, val_logits
     
     def predict(self, test_ds, val_ds):
+        """
+        Predict label classes for test and optionally validation datasets.
+
+        Args:
+            test_ds (Dataset): Test dataset.
+            val_ds (Dataset or None): Validation dataset or None.
+
+        Returns:
+            tuple: (test_labels, val_labels) - arrays of string labels.
+        """
         test_logits, val_logits = self.predict_logits(test_ds, val_ds)
 
         val_labels = None
@@ -205,6 +238,16 @@ class BERTHuggingFaceModel(BaseSentimentModel):
 
 
     def evaluate(self, pred, true_data):
+        """
+        Evaluate predicted labels against true labels and print metrics.
+
+        Args:
+            pred (array-like): Predicted labels as strings.
+            true_data (Dataset): Dataset containing true label ids under "labels".
+
+        Returns:
+            dict: Computed metrics dictionary.
+        """
         true_labels = true_data["labels"]
         true_labels = np.array([ {0:"negative",1:"neutral",2:"positive", None:None}[lab]
                                 for lab in np.array(true_labels) ])
@@ -219,4 +262,3 @@ class BERTHuggingFaceModel(BaseSentimentModel):
         tokenizer = AutoTokenizer.from_pretrained(self.config.model.model_name)
 
         return tokenizer
-

@@ -23,7 +23,8 @@
         "test_path": "../data/test.csv",
         "submission_dir": "../submissions",
         "experiment_output_dir": "../results/experiments",
-        "model_output_dir": "/work/scratch/nbritz/models"
+        "model_output_dir": "/work/scratch/nbritz/models",
+        "llm_path": "../llms/gemma-3-4b-it-q4_0.gguf"
     },
     "prompt": {
         "prompt_list": [

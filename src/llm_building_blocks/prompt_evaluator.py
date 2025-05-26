@@ -14,8 +14,9 @@ from tqdm import tqdm
 import csv
 from config.config import get_default_configs, Config
 from utils.metrics import evaluate, save_validation_metrics
-from models.prompt_catalogue import PromptCatalogue, Prompt, Sentiment
+from llm_building_blocks.prompt_catalogue import PromptCatalogue, Prompt, Sentiment
 
+# Configuration for the LLM 
 @dataclass
 class PromptEvaluatorConfig:
     llm_gguf_path: str
@@ -35,12 +36,11 @@ class PromptEvaluatorConfig:
     debug: bool = False
 
     @staticmethod
-    def for_gemma_3_4b_it(max_n_thinking_tokens=1000, verbose=False, debug=False):
+    def for_gemma_3_4b_it(config, max_n_thinking_tokens=1000, verbose=False, debug=False):
         return PromptEvaluatorConfig(
-            llm_gguf_path=f"{dirname(__file__)}/../../llms/gemma-3-4b-it-q4_0.gguf",
+            llm_gguf_path=config.data.llm_path,
             n_gpu_layers=-1,
-            # n_ctx=1024,
-            n_ctx=8192,
+            n_ctx=4096,
             # CHANGED THE ABOVE TO MAKE IT FASTER
             # Parameters from https://docs.unsloth.ai/basics/gemma-3-how-to-run-and-fine-tune
             temperature=1.0,
@@ -72,6 +72,21 @@ class PromptEvaluator:
         )
 
     def predict_proba(self, prompt: Prompt, X: ArrayLike):
+        """
+        Predict sentiment probabilities for each input using a structured prompt.
+
+        Parameters
+        ----------
+        prompt : Prompt
+            A prompt object containing the template and sentiment mapping.
+        X : ArrayLike
+            An array-like object of input texts to evaluate.
+
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame with sentiment class probabilities for each input.
+        """
         X = np.asarray(X, dtype=np.str_)
 
         # Plan how to fulfill the template.
@@ -238,4 +253,5 @@ class PromptEvaluator:
         )
 
     def predict(self, prompt: Prompt, X: ArrayLike):
+        # Chooses the most probable sentiment from the logits
         return self.predict_proba(prompt, X).idxmax(axis=1)

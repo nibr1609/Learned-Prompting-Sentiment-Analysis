@@ -6,6 +6,21 @@ from sklearn.metrics import (
 import json
 
 def evaluate(pred, labels):
+    """
+    Evaluates prediction performance using various metrics.
+
+    Parameters
+    ----------
+    pred : list of str
+        Predicted sentiment labels. Each element should be one of: "positive", "neutral", "negative".
+    labels : list of str
+        Ground truth sentiment labels. Each element should be one of: "positive", "neutral", "negative".
+
+    Returns
+    -------
+    dict
+        A dictionary containing various evaluation metrics (e.g., accuracy, precision, recall, F1-score).
+    """
     cm = confusion_matrix(labels, pred, labels=['positive', 'neutral', 'negative'])
     
     # Avoid division by zero
@@ -15,7 +30,7 @@ def evaluate(pred, labels):
     TP = np.diag(cm)
 
     # False positive rate: FP / (FP + TN)
-    fp_rate_per_class = FP / (FP + TN + 1e-10)  # add small value to avoid div by 0
+    fp_rate_per_class = FP / (FP + TN + 1e-10)
     macro_fp_rate = fp_rate_per_class.mean()
 
     def nmae(y_true, y_pred):
@@ -42,6 +57,18 @@ def evaluate(pred, labels):
     return metrics
 
 def save_validation_metrics(config, metrics, suffix=None):
+    """
+    Save validation metrics to a JSON file.
+
+    Parameters
+    ----------
+    config : Config
+        Configuration object containing experiment and output directory information.
+    metrics : dict
+        Dictionary containing evaluation metrics to be saved.
+    suffix : str, optional
+        Optional suffix to append to the metrics filename.
+    """
     directory = config.data.experiment_output_dir / f"experiment_{config.experiment.experiment_id}"
     validation_set_dir = directory / "val_set_metrics"
     validation_set_dir.mkdir(parents=True, exist_ok=True)

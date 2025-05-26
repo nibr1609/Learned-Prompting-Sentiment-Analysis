@@ -1,10 +1,10 @@
-from models.prompt_evaluator import PromptEvaluator, Prompt
+from llm_building_blocks.prompt_evaluator import PromptEvaluator, Prompt
 from config.config import get_default_configs, Config
 from utils.metrics import evaluate, save_validation_metrics
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple
-from models.prompt_catalogue import PromptCatalogue, Prompt
+from llm_building_blocks.prompt_catalogue import PromptCatalogue, Prompt
 
 class PromptOptimizer:
     def __init__(self, evaluator: PromptEvaluator, config: Config):
@@ -14,7 +14,17 @@ class PromptOptimizer:
         self.config = config
 
     def evaluate_multiple_prompts(self, prompt_catalogue, set, iteration, train=False):
+        """
+        Evaluate a set of prompts either on the training or validation set.
+
+        Args:
+            prompt_catalogue (PromptCatalogue): Catalogue containing all prompts.
+            set (pd.DataFrame): Dataset with 'sentence' and 'label' columns.
+            iteration (int): Current iteration index.
+            train (bool): Flag indicating whether it's a training evaluation.
+        """
         if train == True:
+            # Evaluate all prompts in prompt catalogue if not already computed
             print(f"Evaluation prompt catalogue in iteration {iteration} for train_set")
             for prompt_id, prompt in prompt_catalogue.get_prompts():
                 if prompt.current_score == None and prompt.current_predictions == None:
@@ -24,25 +34,45 @@ class PromptOptimizer:
 
         else:
             print(f"Evaluation prompt catalogue in iteration {iteration} for val set")
-            nmae = []
-            accuracy = []
+
+            # Compute and save metrics for validation set
+            nmaes = []
+            accuracys = []
+            precision_scores = []
+            recall_scores = []
+            f1_scores = []
             for prompt_id, prompt in prompt_catalogue.get_prompts():
                 predictions = self.evaluator.predict(prompt, list(set["sentence"]))
                 predictions = [label.lower() for label in predictions]
                 metrics = evaluate(predictions, list(set["label"]))
-                nmae.append(metrics["nmae"])
-                accuracy.append(metrics["accuracy"])
+                nmaes.append(metrics["nmae"])
+                accuracys.append(metrics["accuracy"])
+                precision_scores.append(metrics["precision_macro"])
+                recall_scores.append(metrics["recall_macro"])
+                f1_scores.append(metrics["f1_macro"])
 
-            nmae = np.array(nmae)
-            accuracy = np.array(accuracy)
+            mean_nmae = np.mean(nmaes)
+            mean_accuracy = np.mean(accuracys)
+            mean_precision = np.mean(precision_scores)
+            mean_recall = np.mean(recall_scores)
+            mean_f1 = np.mean(f1_scores)
 
-            metrics = {"nmae_mean": float(np.mean(nmae)), "nmae_std": float(np.std(nmae)), "accuracy_mean": float(np.mean(accuracy)), "accuracy_std": float(np.std(accuracy))}
-            print(f"Validation Metrics in Round {iteration}")
-            print(metrics)
-            save_validation_metrics(self.config, metrics, suffix=str(iteration))
+            metrics = {"mean_nmae": float(mean_nmae), "mean_accuracy": float(mean_accuracy), "mean_f1": float(mean_f1), "mean_precision": float(mean_precision),"mean_recall": float(mean_recall)}
+            save_validation_metrics(self.config, metrics, suffix="_prompts_" + str(iteration))
 
     def run_optimization_loop(self, prompt_catalogue: PromptCatalogue, train, val, iterations=3) -> Dict[str, Tuple[List[str], float]]:
-        print("Running Optimization")
+        """
+        Run the full prompt optimization loop for a number of iterations.
+
+        Args:
+            prompt_catalogue (PromptCatalogue): Initial catalogue of prompts.
+            train (pd.DataFrame): Training dataset with 'sentence' and 'label' columns.
+            val (pd.DataFrame): Validation dataset with 'sentence' and 'label' columns.
+            iterations (int): Number of optimization iterations.
+
+        Returns:
+            Dict[str, Tuple[List[str], float]]: Updated prompt catalogue after optimization.
+        """
         target_size = len(prompt_catalogue.get_prompts())
         for i in range(iterations):
             # Evaluate Currente Catalogue on validation data, save
@@ -76,6 +106,14 @@ class PromptOptimizer:
         return prompt_catalogue
 
     def greedy_select_prompts(self, catalogue: PromptCatalogue, labels, size):
+        """
+        Select a subset of prompts using greedy selection to maximize accuracy.
+
+        Args:
+            catalogue (PromptCatalogue): Prompt catalogue with current predictions.
+            labels (List[str]): Ground truth labels for training data.
+            size (int): Number of prompts to select.
+        """
         S = set()
 
         def evaluate_set(prompt_ids, catalogue: PromptCatalogue):
@@ -113,6 +151,7 @@ class PromptOptimizer:
                 if best_prediction.lower() == labels[i]:
                     correct_predictions += 1
             
+            # Compute accuracy score
             accuracy = correct_predictions / len(labels)
             return accuracy, best_prompt_per_sample
         
@@ -139,13 +178,19 @@ class PromptOptimizer:
             if best_prompt_id is not None:
                 S.add(best_prompt_id)
 
-        print("Before Removal")
-        print(catalogue)
         catalogue.filter_prompts(S)
-        print("After Removal")
-        print(catalogue)
 
     def optimize_prompts(self, prompt_catalogue: PromptCatalogue, k):
+        """
+        Generate new prompts by prompting the LLM using top and bottom k prompts.
+
+        Args:
+            prompt_catalogue (PromptCatalogue): Catalogue containing current prompts.
+            k (int): Number of top and bottom prompts to use for optimization.
+
+        Returns:
+            List[str]: List of newly generated prompt strings.
+        """
         base_prompt_good = "<start_of_turn>user\nHere are some really good prompts:"
         base_prompt_bad = "<start_of_turn>user\nHere are some prompts that don't work well:"
 

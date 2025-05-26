@@ -22,7 +22,6 @@ class ModelConfig:
         1: "neutral",
         2: "positive"
     })
-    #prompt_list: List[str] = []
 
 @dataclass
 class ExperimentConfig:
@@ -50,8 +49,9 @@ class DataConfig:
     submission_dir: Path
     experiment_output_dir: Path
     model_output_dir: Path
-    val_split: float = 0.1
+    llm_path: Path
     random_state: int = 42
+
 
 
 @dataclass
@@ -88,6 +88,7 @@ def get_default_configs() -> Config:
         submission_dir=base_path / "submissions",
         experiment_output_dir=base_path / "results/experiments",
         model_output_dir="/work/scratch/nbritz/models",
+        llm_path=base_path / "llms/gemma-3-4b-it-q4_0.gguf",
     )
 
     prompt_config = PromptConfig(

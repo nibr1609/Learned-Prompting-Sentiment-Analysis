@@ -38,7 +38,6 @@ def create_config_from_json(config_dict: Dict[str, Any]) -> Config:
 
 def get_model_class(model_type: str):
     """Get the appropriate model class based on the model name."""
-    # TODO: Load class directly
     model_classes = {
         "HuggingFaceModel": BERTHuggingFaceModel,
         "TwoStageModel": TwoStageModel

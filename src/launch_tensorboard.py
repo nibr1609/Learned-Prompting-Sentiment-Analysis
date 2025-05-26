@@ -10,6 +10,7 @@ def find_model_folder(base_path, id_substring):
     return None
 
 def main():
+    # This is used to launch tensorboard for experiment id (given that experiment created tensorboard logs)
     parser = argparse.ArgumentParser(description="Launch TensorBoard for a given model ID.")
     parser.add_argument("--id", required=True, help="ID substring to search for in model folder names.")
     args = parser.parse_args()
