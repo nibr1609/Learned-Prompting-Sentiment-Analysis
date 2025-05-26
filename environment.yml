@@ -17,7 +17,6 @@ dependencies:
   - transformers=4.51.3
   - evaluate=0.4.3
   - tensorboard=2.19.0
-  - sentencepiece
   - scikit-learn=1.6.1
   # Non-Conda Packages
   - pip:
