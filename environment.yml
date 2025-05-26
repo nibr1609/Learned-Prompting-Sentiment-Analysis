@@ -16,6 +16,11 @@ dependencies:
   - datasets=3.6.0
   - transformers=4.51.3
   - evaluate=0.4.3
+  - tensorboard=2.19.0
+  - sentencepiece
+  - scikit-learn=1.6.1
   # Non-Conda Packages
   - pip:
       - llama-cpp-python==0.3.9
+      - lightning==2.5.1
+      - accelerate==1.6.0
