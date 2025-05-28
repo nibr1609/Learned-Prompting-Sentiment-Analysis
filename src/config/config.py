@@ -49,7 +49,7 @@ class DataConfig:
     submission_dir: Path
     experiment_output_dir: Path
     model_output_dir: Path
-    llm_path: Path
+    llm_path: Optional[Path] = None
     random_state: int = 42
 
 
