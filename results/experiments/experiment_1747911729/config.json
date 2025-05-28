@@ -1,0 +1,27 @@
+{
+    "name": "roberta_experiment",
+    "model": {
+        "model_name": "roberta-base",
+        "model_type": "HuggingFaceModel",
+        "learning_rate": 1e-05,
+        "batch_size": 16,
+        "num_epochs": 3,
+        "weight_decay": 0.01
+    },
+    "experiment": {
+        "experiment_name": "roberta",
+        "mode": "train_inference",
+        "max_train_samples": 30000,
+        "validation_set_split": 0.03,
+        "save_per_epoch": 3,
+        "early_stopping_patience": 3
+    },
+    "data": {
+        "train_path": "../data/training.csv",
+        "test_path": "../data/test.csv",
+        "submission_dir": "../submissions",
+        "experiment_output_dir": "../results/experiments",
+        "model_output_dir": "/work/scratch/nbritz/models"
+    },
+    "prompt": {}
+}
