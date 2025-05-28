@@ -1,2 +1,2 @@
-In this file you can paste your LLM of choice
+In this folder you can paste your LLM of choice
 In the paper we use gemma-3-4b-it-q4_0.gguf
