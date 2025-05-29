@@ -67,10 +67,11 @@ CILProject2025/
 ├── results/                   # results for experiments
 ├── src/                       # Source code (models, utils, evaluation)
 │   ├── ...   
-│   ├── llm_building_blocks/    
-│   ├── models/                # Model architectures and training scripts
-│   ├── utils/                 # Helper functions
+│   ├── llm_building_blocks/   # Building blocks for pipeline
+│   ├── models/                # Model architectures
+│   ├── ...                 # Helper functions
 │   ├── run_experiments.py
+│   ├── launch_tensorboard.py  # Can be used to visualize log of fine-tuning huggingface models
 ├── submissions/               # The submission .csv files are here
 ├── run_gpu.sh                 # SLURM-compatible experiment runner
 ├── run_cpu.sh                 # SLURM-compatible experiment runner
