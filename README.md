@@ -1,4 +1,4 @@
-# Sentiment Classification Project 🌟
+# Sentiment Classification Project
 
 ## Project Description 📖
 
@@ -17,18 +17,18 @@ These modern methods hinge on *prompt engineering* — the art of crafting input
 
 Sentiment analysis remains highly relevant today, powering applications like:
 
-- 📊 Product review analysis
-- 🗣️ Social media monitoring
-- 💬 Customer feedback interpretation
+- Product review analysis
+- Social media monitoring
+- Customer feedback interpretation
 
 ## Our Approach 🔧
 
 This project investigates how **prompt quality** and **prompt selection** affect sentiment classification performance. We propose a two-step optimization pipeline:
 
-- ✨ **Prompt Selector**
+- **Prompt Selector**
   Dynamically selects the most appropriate prompt from a base catalog based on input features.
 
-- 🧪 **Prompt Optimizer**
+- **Prompt Optimizer**
   Analyzes performance trends and generates new high-quality prompts through *meta-prompting*.
 
 Our experiments show that this pipeline improves sentiment accuracy of the **Gemma 3 (4B)** model, compared to static prompts or basic prompt catalogs — *without any model fine-tuning*.
