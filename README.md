@@ -69,7 +69,7 @@ CILProject2025/
 │   ├── ...   
 │   ├── llm_building_blocks/   # Building blocks for pipeline
 │   ├── models/                # Model architectures
-│   ├── ...                 # Helper functions
+│   ├── ...
 │   ├── run_experiments.py
 │   ├── launch_tensorboard.py  # Can be used to visualize log of fine-tuning huggingface models
 ├── submissions/               # The submission .csv files are here
