@@ -62,8 +62,9 @@ CILProject2025/
 ├── data/                      # Test and Training data files
 ├── experiments/               # Configuration files for experiments
 ├── llms/                      # Store your llms here (e.g. xyz.gguf)
-├── ...
-├── results
+├── misc/                      # Supplementary Files
+├── paper/                     # tex code for paper & pdf
+├── results/                   # results for experiments
 ├── src/                       # Source code (models, utils, evaluation)
 │   ├── ...   
 │   ├── llm_building_blocks/    

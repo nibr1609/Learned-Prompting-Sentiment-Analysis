@@ -1,0 +1,22 @@
+\begin{table}[ht]
+\centering
+\caption{Performance metrics for prompting strategies evaluated over all sentences. Single Best uses the one best prompt from the catalog (for all inputs), Mean uses all prompts and takes the mean over their decisions, Selected chooses the prompt adaptively according to the prompt selector's classification.}
+\vspace{2pt}
+\begin{adjustbox}{width=\columnwidth}
+\begin{tabular}{lccc ccc}
+\toprule
+& \multicolumn{3}{c}{\textbf{Standard Prompts}} & \multicolumn{3}{c}{\textbf{Optimized Prompts}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+\textbf{Metric}             & \textbf{Single Best} & \textbf{Mean} & \textbf{Selected} & \textbf{Single Best} & \textbf{Mean} & \textbf{Selected} \\
+\midrule
+NMAE                         & 0.82          & 0.80         & 0.84              & 0.82          & 0.79          & \textbf{0.86}
+\\
+Accuracy                     & 0.68          & 0.65         & 0.74              & 0.68          & 0.64          & \textbf{0.76}               \\
+F1                           & 0.66          & 0.64         & 0.73              & 0.66          & 0.63          & \textbf{0.74}               \\
+Precision                    & 0.73          & 0.67         & \textbf{0.76}              & 0.73          & 0.68          & \textbf{0.76}               \\
+Recall                       & 0.64          & 0.67         & \textbf{0.74}              & 0.64          & 0.66          & \textbf{0.74}               \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\label{table:optimized}
+\end{table}

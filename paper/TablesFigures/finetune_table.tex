@@ -1,0 +1,19 @@
+\begin{table}[ht]
+\centering
+\caption{Comparison of discriminative models vs. learned prompting (DeBERTa selected for Kaggle submission).}
+\vspace{2pt}
+\begin{adjustbox}{width=\columnwidth}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric}               & \textbf{DeBERTa} & \textbf{RoBERTa} & \textbf{Selector \& Optimizer} \\
+\midrule
+NMAE                          & \textbf{0.89}           & 0.87           & 0.86                        \\
+Accuracy                      & \textbf{0.81}           & 0.78           & 0.76                        \\
+Precision (macro)             & \textbf{0.81}           & 0.77          & 0.74                         \\
+Recall (macro)                & \textbf{0.81}         & 0.78          & 0.76                         \\
+F1 (macro)                    & \textbf{0.81}           & 0.78          & 0.74                         \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\label{table:finetune}
+\end{table}

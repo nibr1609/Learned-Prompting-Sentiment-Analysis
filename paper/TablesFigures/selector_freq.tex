@@ -1,0 +1,48 @@
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      ybar,
+      bar width=12pt,
+      enlarge x limits=0.15,
+      ylabel={Relative frequency},
+      symbolic x coords={
+        Customer Review, Restaurants, Sarcasm, Brand Monitor, Context,
+        Prices, Emotion, Movies, Double Negation, General
+      },
+      xtick=data,
+      x tick label style={rotate=45, anchor=east},
+      ymin=0,
+      ymax=0.45,
+      scaled y ticks = false,
+      y tick label style={
+        /pgf/number format/fixed,
+        /pgf/number format/precision=2
+      },
+      every node near coord/.append style={
+        /pgf/number format/fixed,
+        /pgf/number format/precision=2
+      },
+      nodes near coords,
+      nodes near coords align={vertical},
+    ]
+      \addplot[
+        fill=customBar,
+        draw=black            % or draw=customBar for no border contrast
+      ] coordinates {
+        (Customer Review,0.17)
+        (Restaurants,0.00)
+        (Sarcasm,0.11)
+        (Brand Monitor,0.05)
+        (Context,0.39)
+        (Prices,0.03)
+        (Emotion,0.01)
+        (Movies,0.25)
+        (Double Negation,0.00)
+        (General,0.00)
+      };
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Selection rate of standard prompts by prompt evaluator.}
+  \label{fig:selector_freq}
+\end{figure}

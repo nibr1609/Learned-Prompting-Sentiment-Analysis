@@ -1,0 +1,20 @@
+\begin{table*}[ht]
+\centering
+\caption{Classification metrics across domains for individual prompts and prompts adaptively chosen by the prompt selector. }
+\vspace{2pt}
+\begin{adjustbox}{width=\textwidth}
+\begin{tabular}{lcccccccccc|c}
+\toprule
+\textbf{Metric} & \textbf{Customer} & \textbf{Restaurants} & \textbf{Sarcasm} & \textbf{Brand} & \textbf{Context} & \textbf{Prices} & \textbf{Emotion} & \textbf{Movies} & \textbf{Double} & \textbf{General} & \textbf{Selector} \\
+& \textbf{Review} & & & \textbf{Monitor} & & & & & \textbf{Negation} & \\
+\midrule
+NMAE & 0.81 & 0.80 & 0.80 & 0.81 & 0.82 & 0.78 & 0.79 & 0.8 & 0.6 & 0.8 & \textbf{0.84} \\
+Accuracy   & 0.66 & 0.65 & 0.65 & 0.67 & 0.68 & 0.61 & 0.64 & 0.66 & 0.60 & 0.66 & \textbf{0.74} \\
+F1         & 0.64 & 0.65 & 0.61 & 0.67 & 0.66 & 0.60 & 0.65 & 0.66 & 0.60 & 0.66 & \textbf{0.73} \\
+Precision  & 0.69 & 0.66 & 0.70 & 0.68 & 0.73 & 0.64 & 0.66 & 0.68 & 0.64 & 0.68 & \textbf{0.76} \\
+Recall     & 0.65 & 0.68 & 0.63 & 0.70 & 0.64 & 0.62 & 0.69 & 0.69 & 0.66 & 0.71 & \textbf{0.74} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\label{table:selector}
+\end{table*}
